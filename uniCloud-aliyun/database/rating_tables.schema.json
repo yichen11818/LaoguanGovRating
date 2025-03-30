@@ -1,0 +1,70 @@
+{
+  "bsonType": "object",
+  "required": ["name", "type", "rater", "items"],
+  "permission": {
+    "read": "'admin' == auth.role || (doc.rater == auth.username && 'rater' == auth.role)",
+    "create": "'admin' == auth.role",
+    "update": "'admin' == auth.role",
+    "delete": "'admin' == auth.role"
+  },
+  "properties": {
+    "_id": {
+      "description": "ID，系统自动生成"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "评分表名称",
+      "title": "评分表名称"
+    },
+    "type": {
+      "bsonType": "int",
+      "description": "评分表类型：1-(办公室)一般干部评分, 2-(驻村)干部评分, 3-班子评分",
+      "minimum": 1,
+      "maximum": 3,
+      "title": "评分表类型"
+    },
+    "category": {
+      "bsonType": "string",
+      "description": "子类别，如'便民服务'、'党建办'等",
+      "title": "子类别"
+    },
+    "rater": {
+      "bsonType": "string",
+      "description": "评分人用户名",
+      "title": "评分人"
+    },
+    "items": {
+      "bsonType": "array",
+      "description": "评分项目列表",
+      "items": {
+        "bsonType": "object",
+        "properties": {
+          "name": {
+            "bsonType": "string",
+            "description": "评分项目名称",
+            "title": "项目名称"
+          },
+          "maxScore": {
+            "bsonType": "int",
+            "description": "最高分数",
+            "title": "最高分数"
+          }
+        }
+      }
+    },
+    "create_date": {
+      "bsonType": "timestamp",
+      "description": "创建时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    },
+    "update_date": {
+      "bsonType": "timestamp",
+      "description": "更新时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    }
+  }
+} 

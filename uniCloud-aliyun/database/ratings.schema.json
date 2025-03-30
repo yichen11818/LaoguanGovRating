@@ -1,0 +1,82 @@
+{
+  "bsonType": "object",
+  "required": ["table_id", "rater", "subject", "scores"],
+  "permission": {
+    "read": "'admin' == auth.role || doc.rater == auth.username",
+    "create": "'admin' == auth.role || ('rater' == auth.role && doc.rater == auth.username)",
+    "update": "'admin' == auth.role || (doc.rater == auth.username && 'rater' == auth.role)",
+    "delete": "'admin' == auth.role"
+  },
+  "properties": {
+    "_id": {
+      "description": "ID，系统自动生成"
+    },
+    "table_id": {
+      "bsonType": "string",
+      "description": "评分表ID",
+      "foreignKey": "rating_tables._id",
+      "title": "评分表ID"
+    },
+    "rater": {
+      "bsonType": "string",
+      "description": "评分人用户名",
+      "foreignKey": "users.username",
+      "title": "评分人"
+    },
+    "subject": {
+      "bsonType": "string",
+      "description": "考核对象",
+      "title": "考核对象"
+    },
+    "scores": {
+      "bsonType": "array",
+      "description": "评分项目得分列表",
+      "items": {
+        "bsonType": "object",
+        "properties": {
+          "item_id": {
+            "bsonType": "string",
+            "description": "评分项目ID"
+          },
+          "name": {
+            "bsonType": "string",
+            "description": "评分项目名称"
+          },
+          "score": {
+            "bsonType": "number",
+            "description": "得分"
+          },
+          "maxScore": {
+            "bsonType": "number",
+            "description": "最高分数"
+          }
+        }
+      }
+    },
+    "total_score": {
+      "bsonType": "number",
+      "description": "总分",
+      "title": "总分"
+    },
+    "comment": {
+      "bsonType": "string",
+      "description": "评语",
+      "title": "评语"
+    },
+    "rating_date": {
+      "bsonType": "timestamp",
+      "description": "评分日期",
+      "forceDefaultValue": {
+        "$env": "now"
+      },
+      "title": "评分日期"
+    },
+    "update_date": {
+      "bsonType": "timestamp",
+      "description": "更新时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    }
+  }
+} 

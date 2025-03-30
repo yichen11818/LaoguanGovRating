@@ -1,0 +1,50 @@
+{
+  "bsonType": "object",
+  "required": ["name", "table_id"],
+  "permission": {
+    "read": "'admin' == auth.role || ('rater' == auth.role)",
+    "create": "'admin' == auth.role",
+    "update": "'admin' == auth.role",
+    "delete": "'admin' == auth.role"
+  },
+  "properties": {
+    "_id": {
+      "description": "ID，系统自动生成"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "考核对象姓名",
+      "title": "姓名"
+    },
+    "table_id": {
+      "bsonType": "string",
+      "description": "所属评分表ID",
+      "foreignKey": "rating_tables._id",
+      "title": "评分表ID"
+    },
+    "position": {
+      "bsonType": "string",
+      "description": "职位",
+      "title": "职位"
+    },
+    "department": {
+      "bsonType": "string",
+      "description": "部门",
+      "title": "部门"
+    },
+    "create_date": {
+      "bsonType": "timestamp",
+      "description": "创建时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    },
+    "update_date": {
+      "bsonType": "timestamp",
+      "description": "更新时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    }
+  }
+} 

@@ -1,0 +1,50 @@
+{
+  "bsonType": "object",
+  "required": ["username", "password", "role"],
+  "permission": {
+    "read": "doc.username == auth.username || 'admin' == auth.role",
+    "create": "'admin' == auth.role",
+    "update": "doc.username == auth.username || 'admin' == auth.role",
+    "delete": "'admin' == auth.role"
+  },
+  "properties": {
+    "_id": {
+      "description": "ID，系统自动生成"
+    },
+    "username": {
+      "bsonType": "string",
+      "description": "用户名，不能重复",
+      "title": "用户名"
+    },
+    "password": {
+      "bsonType": "string",
+      "description": "密码",
+      "title": "密码"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "姓名",
+      "title": "姓名"
+    },
+    "role": {
+      "bsonType": "string",
+      "enum": ["admin", "rater", "user"],
+      "description": "角色：admin(管理员)、rater(打分成员)、user(普通用户)",
+      "title": "角色"
+    },
+    "assignedTables": {
+      "bsonType": "array",
+      "description": "分配的评分表ID列表（仅打分成员有效）",
+      "items": {
+        "bsonType": "string"
+      }
+    },
+    "create_date": {
+      "bsonType": "timestamp",
+      "description": "创建时间",
+      "forceDefaultValue": {
+        "$env": "now"
+      }
+    }
+  }
+} 
