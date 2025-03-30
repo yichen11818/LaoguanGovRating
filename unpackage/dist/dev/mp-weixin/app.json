@@ -1,7 +1,8 @@
 {
   "pages": [
     "pages/index/index",
-    "pages/login/login"
+    "pages/login/login",
+    "pages/user/profile/profile"
   ],
   "subPackages": [
     {
@@ -11,7 +12,8 @@
         "items/items",
         "subjects/subjects",
         "users/users",
-        "stats/stats"
+        "stats/stats",
+        "password-reset/password-reset"
       ]
     },
     {
@@ -20,12 +22,6 @@
         "tables/tables",
         "rating/rating",
         "history/history"
-      ]
-    },
-    {
-      "root": "pages/user",
-      "pages": [
-        "profile/profile"
       ]
     }
   ],

@@ -144,6 +144,7 @@
 		data() {
 			return {
 				userInfo: {},
+				isLoggedIn: false,
 				stats: {
 					tableCount: 0,
 					subjectCount: 0,
@@ -169,34 +170,54 @@
 			}
 		},
 		onShow() {
-			// 检查登录状态
+			// 检查登录状态，但不强制跳转
 			const token = uni.getStorageSync('token');
-			if (!token) {
-				uni.redirectTo({
-					url: '/pages/login/login'
-				});
-				return;
-			}
+			const userInfo = uni.getStorageSync('userInfo') || {};
 			
-			// 获取用户信息
-			this.userInfo = uni.getStorageSync('userInfo') || {};
-			
-			// 根据角色加载不同数据
-			if (this.userInfo.role === 'admin') {
-				this.loadAdminStats();
-			} else if (this.userInfo.role === 'rater') {
-				this.loadRaterData();
+			if (token && userInfo.role) {
+				this.isLoggedIn = true;
+				this.userInfo = userInfo;
+				
+				// 根据角色加载不同数据
+				if (this.userInfo.role === 'admin') {
+					this.loadAdminStats();
+				} else if (this.userInfo.role === 'rater') {
+					this.loadRaterData();
+				}
+			} else {
+				this.isLoggedIn = false;
+				this.userInfo = {
+					name: '游客',
+					role: 'user'
+				};
 			}
 		},
 		methods: {
+			// 检查登录状态，如未登录则跳转
+			checkLogin() {
+				if (!this.isLoggedIn) {
+					uni.navigateTo({
+						url: '/pages/login/login'
+					});
+					return false;
+				}
+				return true;
+			},
+			
 			navigateTo(url) {
+				// 点击导航时检查登录状态
+				if (!this.checkLogin()) return;
 				uni.navigateTo({ url });
 			},
+			
 			goToRating(tableId) {
+				// 点击去评分时检查登录状态
+				if (!this.checkLogin()) return;
 				uni.navigateTo({
 					url: `/pages/rater/rating/rating?tableId=${tableId}`
 				});
 			},
+			
 			getTableTypeName(type) {
 				const typeMap = {
 					1: '(办公室)一般干部评分',

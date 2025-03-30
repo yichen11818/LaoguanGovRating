@@ -11,6 +11,12 @@
 			"style": {
 				"navigationBarTitleText": "登录"
 			}
+		},
+		{
+			"path": "pages/user/profile/profile",
+			"style": {
+				"navigationBarTitleText": "个人信息"
+			}
 		}
 		
 	],
@@ -47,6 +53,12 @@
 					"style": {
 						"navigationBarTitleText": "评分统计"
 					}
+				},
+				{
+					"path": "password-reset/password-reset",
+					"style": {
+						"navigationBarTitleText": "密码重置管理"
+					}
 				}
 			]
 		},
@@ -69,17 +81,6 @@
 					"path": "history/history",
 					"style": {
 						"navigationBarTitleText": "评分历史"
-					}
-				}
-			]
-		},
-		{
-			"root": "pages/user",
-			"pages": [
-				{
-					"path": "profile/profile",
-					"style": {
-						"navigationBarTitleText": "个人信息"
 					}
 				}
 			]

@@ -5,84 +5,98 @@
 				<image class="avatar" :src="userInfo.avatar || '/static/images/default-avatar.png'" mode="aspectFill"></image>
 			</view>
 			<view class="user-info">
-				<text class="user-name">{{userInfo.name || '未设置姓名'}}</text>
+				<text class="user-name">{{userInfo.name || '游客'}}</text>
 				<view class="user-role" :class="'role-' + userInfo.role">
 					<text>{{getRoleName(userInfo.role)}}</text>
 				</view>
 			</view>
 		</view>
 		
-		<view class="profile-card">
-			<view class="section-title">基本信息</view>
-			
-			<view class="form-group">
-				<view class="form-item">
-					<text class="item-label">用户名</text>
-					<text class="item-value">{{userInfo.username || ''}}</text>
-				</view>
-				<view class="form-item">
-					<text class="item-label">姓名</text>
-					<view class="item-input">
-						<input type="text" v-model="userInfo.name" placeholder="请输入姓名" />
-					</view>
-				</view>
-				<view class="form-item">
-					<text class="item-label">角色</text>
-					<text class="item-value">{{getRoleName(userInfo.role)}}</text>
+		<!-- 未登录状态显示登录提示 -->
+		<view class="login-prompt" v-if="!isLoggedIn">
+			<view class="profile-card">
+				<view class="guest-message">
+					<image class="guest-icon" src="/static/images/user.png" mode="aspectFit"></image>
+					<text class="guest-text">您当前为游客模式，请登录以使用更多功能</text>
+					<button class="login-btn" @click="goToLogin">去登录</button>
 				</view>
 			</view>
-			
-			<button class="save-btn" @click="saveUserInfo">保存信息</button>
 		</view>
 		
-		<view class="profile-card">
-			<view class="section-title">修改密码</view>
+		<!-- 登录状态显示用户信息和操作 -->
+		<block v-if="isLoggedIn">
+			<view class="profile-card">
+				<view class="section-title">基本信息</view>
+				
+				<view class="form-group">
+					<view class="form-item">
+						<text class="item-label">用户名</text>
+						<text class="item-value">{{userInfo.username || ''}}</text>
+					</view>
+					<view class="form-item">
+						<text class="item-label">姓名</text>
+						<view class="item-input">
+							<input type="text" v-model="userInfo.name" placeholder="请输入姓名" />
+						</view>
+					</view>
+					<view class="form-item">
+						<text class="item-label">角色</text>
+						<text class="item-value">{{getRoleName(userInfo.role)}}</text>
+					</view>
+				</view>
+				
+				<button class="save-btn" @click="saveUserInfo">保存信息</button>
+			</view>
 			
-			<view class="form-group">
-				<view class="form-item">
-					<text class="item-label">原密码</text>
-					<view class="item-input">
-						<input type="password" v-model="passwordForm.oldPassword" placeholder="请输入原密码" />
+			<view class="profile-card">
+				<view class="section-title">修改密码</view>
+				
+				<view class="form-group">
+					<view class="form-item">
+						<text class="item-label">原密码</text>
+						<view class="item-input">
+							<input type="password" v-model="passwordForm.oldPassword" placeholder="请输入原密码" />
+						</view>
+					</view>
+					<view class="form-item">
+						<text class="item-label">新密码</text>
+						<view class="item-input">
+							<input type="password" v-model="passwordForm.newPassword" placeholder="请输入新密码" />
+						</view>
+					</view>
+					<view class="form-item">
+						<text class="item-label">确认密码</text>
+						<view class="item-input">
+							<input type="password" v-model="passwordForm.confirmPassword" placeholder="请再次输入新密码" />
+						</view>
 					</view>
 				</view>
-				<view class="form-item">
-					<text class="item-label">新密码</text>
-					<view class="item-input">
-						<input type="password" v-model="passwordForm.newPassword" placeholder="请输入新密码" />
+				
+				<button class="save-btn pwd-btn" @click="changePassword">修改密码</button>
+			</view>
+			
+			<view class="profile-card">
+				<view class="section-title">操作</view>
+				
+				<view class="action-list">
+					<view class="action-item" @click="clearCache">
+						<text class="action-icon">🧹</text>
+						<text class="action-text">清除缓存</text>
+						<text class="action-arrow">❯</text>
 					</view>
-				</view>
-				<view class="form-item">
-					<text class="item-label">确认密码</text>
-					<view class="item-input">
-						<input type="password" v-model="passwordForm.confirmPassword" placeholder="请再次输入新密码" />
+					<view class="action-item" @click="aboutUs">
+						<text class="action-icon">ℹ️</text>
+						<text class="action-text">关于我们</text>
+						<text class="action-arrow">❯</text>
+					</view>
+					<view class="action-item logout" @click="confirmLogout">
+						<text class="action-icon">🚪</text>
+						<text class="action-text">退出登录</text>
+						<text class="action-arrow">❯</text>
 					</view>
 				</view>
 			</view>
-			
-			<button class="save-btn pwd-btn" @click="changePassword">修改密码</button>
-		</view>
-		
-		<view class="profile-card">
-			<view class="section-title">操作</view>
-			
-			<view class="action-list">
-				<view class="action-item" @click="clearCache">
-					<text class="action-icon">🧹</text>
-					<text class="action-text">清除缓存</text>
-					<text class="action-arrow">❯</text>
-				</view>
-				<view class="action-item" @click="aboutUs">
-					<text class="action-icon">ℹ️</text>
-					<text class="action-text">关于我们</text>
-					<text class="action-arrow">❯</text>
-				</view>
-				<view class="action-item logout" @click="confirmLogout">
-					<text class="action-icon">🚪</text>
-					<text class="action-text">退出登录</text>
-					<text class="action-arrow">❯</text>
-				</view>
-			</view>
-		</view>
+		</block>
 		
 		<!-- 版本信息 -->
 		<view class="version-info">
@@ -117,10 +131,11 @@
 	export default {
 		data() {
 			return {
+				isLoggedIn: false,
 				userInfo: {
 					_id: '',
 					username: '',
-					name: '',
+					name: '游客',
 					role: 1,
 					avatar: ''
 				},
@@ -131,10 +146,35 @@
 				}
 			}
 		},
-		onLoad() {
-			this.loadUserInfo();
+		onShow() {
+			this.checkLoginStatus();
 		},
 		methods: {
+			// 检查登录状态
+			checkLoginStatus() {
+				const token = uni.getStorageSync('token');
+				const userInfoStr = uni.getStorageSync('userInfo');
+				
+				if (token && userInfoStr) {
+					this.isLoggedIn = true;
+					this.userInfo = JSON.parse(userInfoStr);
+					this.loadUserInfo();
+				} else {
+					this.isLoggedIn = false;
+					this.userInfo = {
+						name: '游客',
+						role: 1
+					};
+				}
+			},
+			
+			// 前往登录页
+			goToLogin() {
+				uni.navigateTo({
+					url: '/pages/login/login'
+				});
+			},
+			
 			// 加载用户信息
 			loadUserInfo() {
 				// 从本地存储获取用户信息
@@ -166,7 +206,7 @@
 					2: '评分员',
 					3: '管理员'
 				};
-				return roleMap[role] || '未知角色';
+				return roleMap[role] || '游客';
 			},
 			
 			// 保存用户信息
@@ -360,9 +400,16 @@
 				uni.removeStorageSync('token');
 				uni.removeStorageSync('userInfo');
 				
-				// 跳转到登录页
-				uni.reLaunch({
-					url: '/pages/login/login'
+				// 更新状态
+				this.isLoggedIn = false;
+				this.userInfo = {
+					name: '游客',
+					role: 1
+				};
+				
+				uni.showToast({
+					title: '已退出登录',
+					icon: 'success'
 				});
 			}
 		}
@@ -411,6 +458,39 @@
 		font-size: 24rpx;
 		padding: 4rpx 16rpx;
 		border-radius: 20rpx;
+	}
+	
+	/* 未登录提示 */
+	.login-prompt {
+		margin-bottom: 30rpx;
+	}
+	
+	.guest-message {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 30rpx;
+	}
+	
+	.guest-icon {
+		width: 100rpx;
+		height: 100rpx;
+		margin-bottom: 20rpx;
+	}
+	
+	.guest-text {
+		font-size: 30rpx;
+		color: #666;
+		text-align: center;
+		margin-bottom: 30rpx;
+	}
+	
+	.login-btn {
+		background-color: #07c160;
+		color: #fff;
+		font-size: 30rpx;
+		width: 60%;
+		border-radius: 40rpx;
 	}
 	
 	.role-1 {

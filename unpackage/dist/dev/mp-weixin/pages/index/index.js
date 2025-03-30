@@ -5,6 +5,7 @@ const _sfc_main = common_vendor.defineComponent({
   data() {
     return {
       userInfo: new UTSJSONObject({}),
+      isLoggedIn: false,
       stats: new UTSJSONObject({
         tableCount: 0,
         subjectCount: 0,
@@ -31,24 +32,42 @@ const _sfc_main = common_vendor.defineComponent({
   },
   onShow() {
     const token = common_vendor.index.getStorageSync("token");
-    if (!token) {
-      common_vendor.index.redirectTo({
-        url: "/pages/login/login"
+    const userInfo = common_vendor.index.getStorageSync("userInfo") || new UTSJSONObject({});
+    if (token && userInfo.role) {
+      this.isLoggedIn = true;
+      this.userInfo = userInfo;
+      if (this.userInfo.role === "admin") {
+        this.loadAdminStats();
+      } else if (this.userInfo.role === "rater") {
+        this.loadRaterData();
+      }
+    } else {
+      this.isLoggedIn = false;
+      this.userInfo = new UTSJSONObject({
+        name: "游客",
+        role: "user"
       });
-      return null;
-    }
-    this.userInfo = common_vendor.index.getStorageSync("userInfo") || new UTSJSONObject({});
-    if (this.userInfo.role === "admin") {
-      this.loadAdminStats();
-    } else if (this.userInfo.role === "rater") {
-      this.loadRaterData();
     }
   },
   methods: {
+    // 检查登录状态，如未登录则跳转
+    checkLogin() {
+      if (!this.isLoggedIn) {
+        common_vendor.index.navigateTo({
+          url: "/pages/login/login"
+        });
+        return false;
+      }
+      return true;
+    },
     navigateTo(url = null) {
+      if (!this.checkLogin())
+        return null;
       common_vendor.index.navigateTo({ url });
     },
     goToRating(tableId = null) {
+      if (!this.checkLogin())
+        return null;
       common_vendor.index.navigateTo({
         url: `/pages/rater/rating/rating?tableId=${tableId}`
       });

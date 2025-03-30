@@ -4,15 +4,16 @@ const common_vendor = require("./common/vendor.js");
 if (!Math) {
   "./pages/index/index.js";
   "./pages/login/login.js";
+  "./pages/user/profile/profile.js";
   "./pages/admin/tables/tables.js";
   "./pages/admin/items/items.js";
   "./pages/admin/subjects/subjects.js";
   "./pages/admin/users/users.js";
   "./pages/admin/stats/stats.js";
+  "./pages/admin/password-reset/password-reset.js";
   "./pages/rater/tables/tables.js";
   "./pages/rater/rating/rating.js";
   "./pages/rater/history/history.js";
-  "./pages/user/profile/profile.js";
 }
 const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
   onLaunch: function() {

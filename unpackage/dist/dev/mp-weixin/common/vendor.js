@@ -9432,6 +9432,12 @@ const pages = [
     style: new UTSJSONObject({
       navigationBarTitleText: "登录"
     })
+  }),
+  new UTSJSONObject({
+    path: "pages/user/profile/profile",
+    style: new UTSJSONObject({
+      navigationBarTitleText: "个人信息"
+    })
   })
 ];
 const subPackages = [
@@ -9467,6 +9473,12 @@ const subPackages = [
         style: new UTSJSONObject({
           navigationBarTitleText: "评分统计"
         })
+      }),
+      new UTSJSONObject({
+        path: "password-reset/password-reset",
+        style: new UTSJSONObject({
+          navigationBarTitleText: "密码重置管理"
+        })
       })
     ]
   }),
@@ -9489,17 +9501,6 @@ const subPackages = [
         path: "history/history",
         style: new UTSJSONObject({
           navigationBarTitleText: "评分历史"
-        })
-      })
-    ]
-  }),
-  new UTSJSONObject({
-    root: "pages/user",
-    pages: [
-      new UTSJSONObject({
-        path: "profile/profile",
-        style: new UTSJSONObject({
-          navigationBarTitleText: "个人信息"
         })
       })
     ]
@@ -9828,7 +9829,7 @@ class v {
 function I(e2) {
   return e2 && "string" == typeof e2 ? JSON.parse(e2) : e2;
 }
-const S = true, b = "mp-weixin", T = I(define_process_env_UNI_SECURE_NETWORK_CONFIG_default), A = b, P = I('{"address":["127.0.0.1","192.168.137.1","169.254.4.248","169.254.172.131","192.168.6.175"],"servePort":7001,"debugPort":9001,"initialLaunchType":"local","skipFiles":["<node_internals>/**","C:/Program Files/HBuilderX/plugins/unicloud/**/*.js"]}'), C = I('[{"provider":"aliyun","spaceName":"laoguan","spaceId":"mp-45f080bc-b7cb-4162-82af-169543c26542","clientSecret":"VfC0XQLptjGRnFv3OD14mA==","endpoint":"https://api.next.bspapp.com"}]') || [];
+const S = true, b = "mp-weixin", T = I(define_process_env_UNI_SECURE_NETWORK_CONFIG_default), A = b, P = I('{"address":["127.0.0.1","192.168.137.1","169.254.4.248","169.254.172.131","192.168.6.175"],"servePort":7000,"debugPort":9000,"initialLaunchType":"local","skipFiles":["<node_internals>/**","C:/Program Files/HBuilderX/plugins/unicloud/**/*.js"]}'), C = I('[{"provider":"aliyun","spaceName":"laoguan","spaceId":"mp-45f080bc-b7cb-4162-82af-169543c26542","clientSecret":"VfC0XQLptjGRnFv3OD14mA==","endpoint":"https://api.next.bspapp.com"}]') || [];
 let O = "";
 try {
   O = "__UNI__76C800D";

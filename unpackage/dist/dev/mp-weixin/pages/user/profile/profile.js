@@ -4,10 +4,11 @@ const common_assets = require("../../../common/assets.js");
 const _sfc_main = common_vendor.defineComponent({
   data() {
     return {
+      isLoggedIn: false,
       userInfo: new UTSJSONObject({
         _id: "",
         username: "",
-        name: "",
+        name: "游客",
         role: 1,
         avatar: ""
       }),
@@ -18,10 +19,32 @@ const _sfc_main = common_vendor.defineComponent({
       })
     };
   },
-  onLoad() {
-    this.loadUserInfo();
+  onShow() {
+    this.checkLoginStatus();
   },
   methods: {
+    // 检查登录状态
+    checkLoginStatus() {
+      const token = common_vendor.index.getStorageSync("token");
+      const userInfoStr = common_vendor.index.getStorageSync("userInfo");
+      if (token && userInfoStr) {
+        this.isLoggedIn = true;
+        this.userInfo = UTS.JSON.parse(userInfoStr);
+        this.loadUserInfo();
+      } else {
+        this.isLoggedIn = false;
+        this.userInfo = {
+          name: "游客",
+          role: 1
+        };
+      }
+    },
+    // 前往登录页
+    goToLogin() {
+      common_vendor.index.navigateTo({
+        url: "/pages/login/login"
+      });
+    },
     // 加载用户信息
     loadUserInfo() {
       const userInfoStr = common_vendor.index.getStorageSync("userInfo");
@@ -48,7 +71,7 @@ const _sfc_main = common_vendor.defineComponent({
         2: "评分员",
         3: "管理员"
       });
-      return roleMap[role] || "未知角色";
+      return roleMap[role] || "游客";
     },
     // 保存用户信息
     saveUserInfo() {
@@ -86,7 +109,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/user/profile/profile.vue:213", err);
+        common_vendor.index.__f__("error", "at pages/user/profile/profile.vue:253", err);
         common_vendor.index.showToast({
           title: "保存失败，请检查网络",
           icon: "none"
@@ -155,7 +178,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/user/profile/profile.vue:292", err);
+        common_vendor.index.__f__("error", "at pages/user/profile/profile.vue:332", err);
         common_vendor.index.showToast({
           title: "密码修改失败，请检查网络",
           icon: "none"
@@ -184,7 +207,7 @@ const _sfc_main = common_vendor.defineComponent({
         });
       } catch (e) {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/user/profile/profile.vue:329", e);
+        common_vendor.index.__f__("error", "at pages/user/profile/profile.vue:369", e);
         common_vendor.index.showToast({
           title: "缓存清除失败",
           icon: "none"
@@ -211,8 +234,14 @@ const _sfc_main = common_vendor.defineComponent({
     logout() {
       common_vendor.index.removeStorageSync("token");
       common_vendor.index.removeStorageSync("userInfo");
-      common_vendor.index.reLaunch({
-        url: "/pages/login/login"
+      this.isLoggedIn = false;
+      this.userInfo = {
+        name: "游客",
+        role: 1
+      };
+      common_vendor.index.showToast({
+        title: "已退出登录",
+        icon: "success"
       });
     }
   }
@@ -223,46 +252,54 @@ if (!Array) {
   (_component_uni_popup_dialog + _component_uni_popup)();
 }
 function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
-  return {
+  return common_vendor.e({
     a: $data.userInfo.avatar || "/static/images/default-avatar.png",
-    b: common_vendor.t($data.userInfo.name || "未设置姓名"),
+    b: common_vendor.t($data.userInfo.name || "游客"),
     c: common_vendor.t($options.getRoleName($data.userInfo.role)),
     d: common_vendor.n("role-" + $data.userInfo.role),
-    e: common_vendor.t($data.userInfo.username || ""),
-    f: $data.userInfo.name,
-    g: common_vendor.o(($event) => $data.userInfo.name = $event.detail.value),
-    h: common_vendor.t($options.getRoleName($data.userInfo.role)),
-    i: common_vendor.o((...args) => $options.saveUserInfo && $options.saveUserInfo(...args)),
-    j: $data.passwordForm.oldPassword,
-    k: common_vendor.o(($event) => $data.passwordForm.oldPassword = $event.detail.value),
-    l: $data.passwordForm.newPassword,
-    m: common_vendor.o(($event) => $data.passwordForm.newPassword = $event.detail.value),
-    n: $data.passwordForm.confirmPassword,
-    o: common_vendor.o(($event) => $data.passwordForm.confirmPassword = $event.detail.value),
-    p: common_vendor.o((...args) => $options.changePassword && $options.changePassword(...args)),
-    q: common_vendor.o((...args) => $options.clearCache && $options.clearCache(...args)),
-    r: common_vendor.o((...args) => $options.aboutUs && $options.aboutUs(...args)),
-    s: common_vendor.o((...args) => $options.confirmLogout && $options.confirmLogout(...args)),
-    t: common_vendor.o($options.logout),
-    v: common_vendor.o($options.closeLogoutPopup),
-    w: common_vendor.p({
+    e: !$data.isLoggedIn
+  }, !$data.isLoggedIn ? {
+    f: common_assets._imports_0$1,
+    g: common_vendor.o((...args) => $options.goToLogin && $options.goToLogin(...args))
+  } : {}, {
+    h: $data.isLoggedIn
+  }, $data.isLoggedIn ? {
+    i: common_vendor.t($data.userInfo.username || ""),
+    j: $data.userInfo.name,
+    k: common_vendor.o(($event) => $data.userInfo.name = $event.detail.value),
+    l: common_vendor.t($options.getRoleName($data.userInfo.role)),
+    m: common_vendor.o((...args) => $options.saveUserInfo && $options.saveUserInfo(...args)),
+    n: $data.passwordForm.oldPassword,
+    o: common_vendor.o(($event) => $data.passwordForm.oldPassword = $event.detail.value),
+    p: $data.passwordForm.newPassword,
+    q: common_vendor.o(($event) => $data.passwordForm.newPassword = $event.detail.value),
+    r: $data.passwordForm.confirmPassword,
+    s: common_vendor.o(($event) => $data.passwordForm.confirmPassword = $event.detail.value),
+    t: common_vendor.o((...args) => $options.changePassword && $options.changePassword(...args)),
+    v: common_vendor.o((...args) => $options.clearCache && $options.clearCache(...args)),
+    w: common_vendor.o((...args) => $options.aboutUs && $options.aboutUs(...args)),
+    x: common_vendor.o((...args) => $options.confirmLogout && $options.confirmLogout(...args))
+  } : {}, {
+    y: common_vendor.o($options.logout),
+    z: common_vendor.o($options.closeLogoutPopup),
+    A: common_vendor.p({
       type: "warn",
       title: "确认退出",
       content: "确定要退出登录吗？",
       ["before-close"]: true
     }),
-    x: common_vendor.sr("logoutPopup", "198aad34-0"),
-    y: common_vendor.p({
+    B: common_vendor.sr("logoutPopup", "198aad34-0"),
+    C: common_vendor.p({
       type: "dialog"
     }),
-    z: common_vendor.o((...args) => $options.closeAboutPopup && $options.closeAboutPopup(...args)),
-    A: common_assets._imports_0$1,
-    B: common_vendor.sr("aboutPopup", "198aad34-2"),
-    C: common_vendor.p({
+    D: common_vendor.o((...args) => $options.closeAboutPopup && $options.closeAboutPopup(...args)),
+    E: common_assets._imports_1$1,
+    F: common_vendor.sr("aboutPopup", "198aad34-2"),
+    G: common_vendor.p({
       type: "center"
     }),
-    D: common_vendor.sei(common_vendor.gei(_ctx, ""), "view")
-  };
+    H: common_vendor.sei(common_vendor.gei(_ctx, ""), "view")
+  });
 }
 const MiniProgramPage = /* @__PURE__ */ common_vendor._export_sfc(_sfc_main, [["render", _sfc_render]]);
 wx.createPage(MiniProgramPage);
