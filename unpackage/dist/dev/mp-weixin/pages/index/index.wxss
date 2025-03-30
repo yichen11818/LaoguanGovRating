@@ -1,13 +1,237 @@
 @import "../../uvue.wxss";
 :host{display:flex;flex-direction:column}
 
-.logo {
-		height: 100px;
-		width: 100px;
-		margin: 100px auto 25px auto;
+.container {
+		padding: 30rpx;
 }
-.title {
-		font-size: 18px;
-		color: #8f8f94;
-    text-align: center;
+.header {
+		margin-bottom: 30rpx;
+}
+.welcome {
+		display: flex;
+		align-items: center;
+}
+.welcome-text {
+		font-size: 36rpx;
+		font-weight: bold;
+		margin-right: 20rpx;
+}
+.role-tag {
+		font-size: 24rpx;
+		padding: 4rpx 16rpx;
+		border-radius: 20rpx;
+		color: #fff;
+}
+.role-admin {
+		background-color: #e64340;
+}
+.role-rater {
+		background-color: #07c160;
+}
+.role-user {
+		background-color: #1989fa;
+}
+.panel-header {
+		margin-bottom: 30rpx;
+}
+.panel-title {
+		font-size: 32rpx;
+		font-weight: bold;
+		position: relative;
+		padding-left: 20rpx;
+}
+.panel-title::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: 6rpx;
+		width: 8rpx;
+		height: 32rpx;
+		background-color: #07c160;
+		border-radius: 4rpx;
+}
+	
+	/* 统计卡片样式 */
+.stat-cards {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		margin-bottom: 40rpx;
+}
+.stat-card {
+		width: 48%;
+		background-color: #f8f8f8;
+		border-radius: 16rpx;
+		padding: 30rpx;
+		box-sizing: border-box;
+		margin-bottom: 20rpx;
+		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+.stat-num {
+		font-size: 42rpx;
+		font-weight: bold;
+		color: #333;
+		display: block;
+		margin-bottom: 10rpx;
+}
+.stat-label {
+		font-size: 26rpx;
+		color: #999;
+}
+	
+	/* 快捷操作样式 */
+.quick-actions {
+		margin-top: 40rpx;
+}
+.action-title {
+		font-size: 30rpx;
+		font-weight: bold;
+		margin-bottom: 20rpx;
+}
+.action-list {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+}
+.action-item {
+		width: 23%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		margin-bottom: 30rpx;
+}
+.action-icon {
+		width: 80rpx;
+		height: 80rpx;
+		margin-bottom: 10rpx;
+}
+.action-text {
+		font-size: 26rpx;
+		color: #333;
+		text-align: center;
+}
+	
+	/* 评分员界面样式 */
+.rater-stats {
+		display: flex;
+		justify-content: space-between;
+		margin-bottom: 40rpx;
+}
+.rater-stats .stat-card {
+		width: 32%;
+}
+.table-list {
+		background-color: #fff;
+		border-radius: 16rpx;
+		padding: 30rpx;
+		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+.list-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 20rpx;
+		padding-bottom: 20rpx;
+		border-bottom: 1rpx solid #eee;
+}
+.list-title {
+		font-size: 30rpx;
+		font-weight: bold;
+}
+.more-link {
+		font-size: 26rpx;
+		color: #07c160;
+}
+.no-data {
+		padding: 60rpx 0;
+		text-align: center;
+}
+.no-data-text {
+		font-size: 28rpx;
+		color: #999;
+}
+.table-item {
+		padding: 20rpx 0;
+		border-bottom: 1rpx solid #f5f5f5;
+}
+.table-info {
+		display: flex;
+		justify-content: space-between;
+		margin-bottom: 10rpx;
+}
+.table-name {
+		font-size: 30rpx;
+		font-weight: bold;
+}
+.table-type {
+		font-size: 24rpx;
+		color: #666;
+		background-color: #f5f5f5;
+		padding: 2rpx 12rpx;
+		border-radius: 6rpx;
+}
+.table-category {
+		font-size: 26rpx;
+		color: #999;
+		margin-bottom: 16rpx;
+		display: block;
+}
+.table-progress {
+		margin-top: 20rpx;
+}
+.progress-text {
+		font-size: 24rpx;
+		color: #666;
+		margin-top: 6rpx;
+		display: block;
+}
+	
+	/* 普通用户界面样式 */
+.user-info {
+		background-color: #fff;
+		border-radius: 16rpx;
+		padding: 30rpx;
+		margin-bottom: 40rpx;
+		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+.info-item {
+		display: flex;
+		margin-bottom: 20rpx;
+		padding-bottom: 20rpx;
+		border-bottom: 1rpx solid #f5f5f5;
+}
+.info-item:last-child {
+		margin-bottom: 0;
+		padding-bottom: 0;
+		border-bottom: none;
+}
+.info-label {
+		width: 160rpx;
+		font-size: 28rpx;
+		color: #666;
+}
+.info-value {
+		flex: 1;
+		font-size: 28rpx;
+		color: #333;
+}
+.notice-box {
+		background-color: #fff;
+		border-radius: 16rpx;
+		overflow: hidden;
+		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+.notice-title {
+		background-color: #f8f8f8;
+		padding: 20rpx 30rpx;
+		font-size: 30rpx;
+		font-weight: bold;
+}
+.notice-content {
+		padding: 30rpx;
+}
+.notice-text {
+		font-size: 28rpx;
+		color: #666;
+		line-height: 1.6;
 }

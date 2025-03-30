@@ -1,0 +1,219 @@
+@import "../../../uvue.wxss";
+:host{display:flex;flex-direction:column}
+
+.container {
+		padding: 30rpx;
+}
+	
+	/* 头像和用户信息 */
+.profile-header {
+		display: flex;
+		align-items: center;
+		margin-bottom: 40rpx;
+}
+.avatar-box {
+		width: 150rpx;
+		height: 150rpx;
+		border-radius: 50%;
+		overflow: hidden;
+		background-color: #f5f5f5;
+		margin-right: 30rpx;
+}
+.avatar {
+		width: 100%;
+		height: 100%;
+}
+.user-info {
+		flex: 1;
+}
+.user-name {
+		font-size: 36rpx;
+		font-weight: bold;
+		display: block;
+		margin-bottom: 16rpx;
+}
+.user-role {
+		display: inline-block;
+		font-size: 24rpx;
+		padding: 4rpx 16rpx;
+		border-radius: 20rpx;
+}
+.role-1 {
+		background-color: #f5f5f5;
+		color: #666;
+}
+.role-2 {
+		background-color: #e6f3fc;
+		color: #1989fa;
+}
+.role-3 {
+		background-color: #e6f7ed;
+		color: #07c160;
+}
+	
+	/* 信息卡片 */
+.profile-card {
+		background-color: #fff;
+		border-radius: 16rpx;
+		padding: 30rpx;
+		margin-bottom: 30rpx;
+		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+}
+.section-title {
+		font-size: 34rpx;
+		font-weight: bold;
+		margin-bottom: 30rpx;
+		position: relative;
+		padding-left: 20rpx;
+}
+.section-title::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: 6rpx;
+		width: 8rpx;
+		height: 30rpx;
+		background-color: #07c160;
+		border-radius: 4rpx;
+}
+	
+	/* 表单样式 */
+.form-group {
+		margin-bottom: 30rpx;
+}
+.form-item {
+		display: flex;
+		align-items: center;
+		padding: 20rpx 0;
+		border-bottom: 1rpx solid #f5f5f5;
+}
+.form-item:last-child {
+		border-bottom: none;
+}
+.item-label {
+		width: 140rpx;
+		font-size: 28rpx;
+		color: #666;
+}
+.item-value {
+		flex: 1;
+		font-size: 28rpx;
+		color: #333;
+}
+.item-input {
+		flex: 1;
+}
+.item-input input {
+		height: 60rpx;
+		font-size: 28rpx;
+}
+.save-btn {
+		background-color: #07c160;
+		color: #fff;
+		font-size: 30rpx;
+		border-radius: 8rpx;
+		margin-top: 20rpx;
+}
+.pwd-btn {
+		background-color: #1989fa;
+}
+	
+	/* 操作列表 */
+.action-list {
+		margin-bottom: 20rpx;
+}
+.action-item {
+		display: flex;
+		align-items: center;
+		padding: 30rpx 0;
+		border-bottom: 1rpx solid #f5f5f5;
+}
+.action-item:last-child {
+		border-bottom: none;
+}
+.action-icon {
+		font-size: 40rpx;
+		margin-right: 20rpx;
+}
+.action-text {
+		flex: 1;
+		font-size: 30rpx;
+		color: #333;
+}
+.action-arrow {
+		font-size: 24rpx;
+		color: #ccc;
+}
+.logout .action-text {
+		color: #fa5151;
+}
+	
+	/* 版本信息 */
+.version-info {
+		text-align: center;
+		padding: 30rpx 0;
+		color: #999;
+		font-size: 24rpx;
+}
+	
+	/* 关于我们弹窗 */
+.about-popup {
+		background-color: #fff;
+		border-radius: 16rpx;
+		width: 600rpx;
+		overflow: hidden;
+}
+.about-header {
+		padding: 30rpx;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		border-bottom: 1rpx solid #f5f5f5;
+}
+.about-title {
+		font-size: 32rpx;
+		font-weight: bold;
+}
+.popup-close {
+		font-size: 24rpx;
+		color: #999;
+		width: 40rpx;
+		height: 40rpx;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 50%;
+		background-color: #f5f5f5;
+}
+.about-content {
+		padding: 40rpx 30rpx;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+}
+.about-logo {
+		width: 150rpx;
+		height: 150rpx;
+		margin-bottom: 30rpx;
+}
+.about-name {
+		font-size: 34rpx;
+		font-weight: bold;
+		margin-bottom: 10rpx;
+}
+.about-version {
+		font-size: 24rpx;
+		color: #999;
+		margin-bottom: 30rpx;
+}
+.about-desc {
+		font-size: 28rpx;
+		color: #666;
+		text-align: center;
+		line-height: 1.5;
+		margin-bottom: 40rpx;
+}
+.about-copyright {
+		font-size: 24rpx;
+		color: #999;
+}

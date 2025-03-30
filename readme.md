@@ -7,3 +7,28 @@
 
 
 
+项目目录结构:
+├─ pages                    // 页面文件夹
+│  ├─ login                 // 登录页
+│  ├─ index                 // 主页/仪表盘
+│  ├─ admin                 // 管理员页面
+│  │  ├─ tables            // 评分表管理
+│  │  ├─ items             // 评分项管理
+│  │  ├─ subjects          // 考核对象管理
+│  │  ├─ users             // 用户管理
+│  │  └─ stats             // 评分统计
+│  ├─ rater                 // 打分成员页面
+│  │  ├─ tables            // 评分表列表
+│  │  ├─ rating            // 评分界面
+│  │  └─ history           // 历史评分记录
+│  └─ user                  // 普通用户页面
+│     └─ profile           // 个人信息
+├─ components               // 组件文件夹
+│  ├─ table-card           // 评分表卡片组件
+│  ├─ subject-list         // 考核对象列表组件
+│  ├─ rating-form          // 评分表单组件
+│  ├─ stats-chart          // 统计图表组件
+│  └─ user-card            // 用户信息卡片组件
+└─ static                   // 静态资源
+   ├─ images               // 图片资源
+   └─ styles               // 样式文件

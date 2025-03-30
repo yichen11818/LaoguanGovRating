@@ -118,6 +118,26 @@ function parseStringStyle(cssText) {
   });
   return ret;
 }
+function normalizeClass$1(value) {
+  let res = "";
+  if (isString(value)) {
+    res = value;
+  } else if (isArray(value)) {
+    for (let i2 = 0; i2 < value.length; i2++) {
+      const normalized = normalizeClass$1(value[i2]);
+      if (normalized) {
+        res += normalized + " ";
+      }
+    }
+  } else if (isObject(value)) {
+    for (const name in value) {
+      if (value[name]) {
+        res += name + " ";
+      }
+    }
+  }
+  return res.trim();
+}
 const toDisplayString = (val) => {
   return isString(val) ? val : val == null ? "" : isArray(val) || isObject(val) && (val.toString === objectToString || !isFunction(val.toString)) ? JSON.stringify(val, replacer, 2) : String(val);
 };
@@ -337,6 +357,33 @@ function normalizeStyle(value) {
   } else {
     return normalizeStyle$1(value);
   }
+}
+function normalizeClass(value) {
+  let res = "";
+  const g2 = getGlobal$1();
+  if (g2 && g2.UTSJSONObject && value instanceof g2.UTSJSONObject) {
+    g2.UTSJSONObject.keys(value).forEach((key) => {
+      if (value[key]) {
+        res += key + " ";
+      }
+    });
+  } else if (value instanceof Map) {
+    value.forEach((value2, key) => {
+      if (value2) {
+        res += key + " ";
+      }
+    });
+  } else if (isArray(value)) {
+    for (let i2 = 0; i2 < value.length; i2++) {
+      const normalized = normalizeClass(value[i2]);
+      if (normalized) {
+        res += normalized + " ";
+      }
+    }
+  } else {
+    res = normalizeClass$1(value);
+  }
+  return res.trim();
 }
 const encode = encodeURIComponent;
 function stringifyQuery(obj, encodeStr = encode) {
@@ -1373,6 +1420,9 @@ function isReadonly(value) {
 function isShallow(value) {
   return !!(value && value["__v_isShallow"]);
 }
+function isProxy(value) {
+  return isReactive(value) || isReadonly(value);
+}
 function toRaw(observed) {
   const raw = observed && observed["__v_raw"];
   return raw ? toRaw(raw) : observed;
@@ -2163,6 +2213,47 @@ function setCurrentRenderingInstance(instance) {
   currentRenderingInstance = instance;
   instance && instance.type.__scopeId || null;
   return prev;
+}
+const COMPONENTS = "components";
+function resolveComponent(name, maybeSelfReference) {
+  return resolveAsset(COMPONENTS, name, true, maybeSelfReference) || name;
+}
+function resolveAsset(type, name, warnMissing = true, maybeSelfReference = false) {
+  const instance = currentRenderingInstance || currentInstance;
+  if (instance) {
+    const Component2 = instance.type;
+    if (type === COMPONENTS) {
+      const selfName = getComponentName(
+        Component2,
+        false
+      );
+      if (selfName && (selfName === name || selfName === camelize(name) || selfName === capitalize(camelize(name)))) {
+        return Component2;
+      }
+    }
+    const res = (
+      // local registration
+      // check instance[type] first which is resolved for options API
+      resolve(instance[type] || Component2[type], name) || // global registration
+      resolve(instance.appContext[type], name)
+    );
+    if (!res && maybeSelfReference) {
+      return Component2;
+    }
+    if (warnMissing && !res) {
+      const extra = type === COMPONENTS ? `
+If this is a native custom element, make sure to exclude it from component resolution via compilerOptions.isCustomElement.` : ``;
+      warn$1(`Failed to resolve ${type.slice(0, -1)}: ${name}${extra}`);
+    }
+    return res;
+  } else {
+    warn$1(
+      `resolve${capitalize(type.slice(0, -1))} can only be used in render() or setup().`
+    );
+  }
+}
+function resolve(registry, name) {
+  return registry && (registry[name] || registry[camelize(name)] || registry[capitalize(camelize(name))]);
 }
 const INITIAL_WATCHER_VALUE = {};
 function watch(source, cb, options) {
@@ -3783,6 +3874,12 @@ const Static = Symbol.for("v-stc");
 function isVNode(value) {
   return value ? value.__v_isVNode === true : false;
 }
+const InternalObjectKey = `__vInternal`;
+function guardReactiveProps(props) {
+  if (!props)
+    return null;
+  return isProxy(props) || InternalObjectKey in props ? extend({}, props) : props;
+}
 const emptyAppContext = createAppContext();
 let uid = 0;
 function createComponentInstance(vnode, parent, suspense) {
@@ -5021,6 +5118,11 @@ function initApp(app) {
   }
 }
 const propsCaches = /* @__PURE__ */ Object.create(null);
+function renderProps(props) {
+  const { uid: uid2, __counter } = getCurrentInstance();
+  const propsId = (propsCaches[uid2] || (propsCaches[uid2] = [])).push(guardReactiveProps(props)) - 1;
+  return uid2 + "," + propsId + "," + __counter;
+}
 function pruneComponentPropsCache(uid2) {
   delete propsCaches[uid2];
 }
@@ -5488,6 +5590,29 @@ function findUniElement(id, ins = getCurrentInstance()) {
   }
   return null;
 }
+function createDummyUniElement() {
+  return new UniElement("", "");
+}
+function createEventElement(id, ins) {
+  if (!id || !ins) {
+    return createDummyUniElement();
+  }
+  const element = findUniElement(id, ins);
+  if (!element) {
+    return createDummyUniElement();
+  }
+  return createUniElement(id, element.tagName, ins);
+}
+function createEventTarget(target, ins) {
+  const id = (target === null || target === void 0 ? void 0 : target.id) || "";
+  const element = createEventElement(id, ins);
+  if (element) {
+    element.dataset = (target === null || target === void 0 ? void 0 : target.dataset) || {};
+    element.offsetTop = typeof (target === null || target === void 0 ? void 0 : target.offsetTop) === "number" ? target === null || target === void 0 ? void 0 : target.offsetTop : NaN;
+    element.offsetLeft = typeof (target === null || target === void 0 ? void 0 : target.offsetLeft) === "number" ? target === null || target === void 0 ? void 0 : target.offsetLeft : NaN;
+  }
+  return element;
+}
 function initMiniProgramNode(uniElement, ins) {
   if (uniElement.tagName === "SCROLL-VIEW") {
     uniElement.$node = new Promise((resolve2) => {
@@ -5504,6 +5629,179 @@ function initMiniProgramNode(uniElement, ins) {
       }, 2);
     });
   }
+}
+function vOn(value, key) {
+  const instance = getCurrentInstance();
+  const ctx = instance.ctx;
+  const extraKey = typeof key !== "undefined" && (ctx.$mpPlatform === "mp-weixin" || ctx.$mpPlatform === "mp-qq" || ctx.$mpPlatform === "mp-xhs") && (isString(key) || typeof key === "number") ? "_" + key : "";
+  const name = "e" + instance.$ei++ + extraKey;
+  const mpInstance = ctx.$scope;
+  if (!value) {
+    delete mpInstance[name];
+    return name;
+  }
+  const existingInvoker = mpInstance[name];
+  if (existingInvoker) {
+    existingInvoker.value = value;
+  } else {
+    mpInstance[name] = createInvoker(value, instance);
+  }
+  return name;
+}
+function createInvoker(initialValue, instance) {
+  const invoker = (e2) => {
+    patchMPEvent(e2, instance);
+    let args = [e2];
+    if (instance && instance.ctx.$getTriggerEventDetail) {
+      if (typeof e2.detail === "number") {
+        e2.detail = instance.ctx.$getTriggerEventDetail(e2.detail);
+      }
+    }
+    if (e2.detail && e2.detail.__args__) {
+      args = e2.detail.__args__;
+    }
+    const eventValue = invoker.value;
+    const invoke = () => callWithAsyncErrorHandling(patchStopImmediatePropagation(e2, eventValue), instance, 5, args);
+    const eventTarget = e2.target;
+    const eventSync = eventTarget ? eventTarget.dataset ? String(eventTarget.dataset.eventsync) === "true" : false : false;
+    if (bubbles.includes(e2.type) && !eventSync) {
+      setTimeout(invoke);
+    } else {
+      const res = invoke();
+      if (e2.type === "input" && (isArray(res) || isPromise(res))) {
+        return;
+      }
+      return res;
+    }
+  };
+  invoker.value = initialValue;
+  return invoker;
+}
+const bubbles = [
+  // touch事件暂不做延迟，否则在 Android 上会影响性能，比如一些拖拽跟手手势等
+  // 'touchstart',
+  // 'touchmove',
+  // 'touchcancel',
+  // 'touchend',
+  "tap",
+  "longpress",
+  "longtap",
+  "transitionend",
+  "animationstart",
+  "animationiteration",
+  "animationend",
+  "touchforcechange"
+];
+function isMPTapEvent(event) {
+  return event.type === "tap";
+}
+function normalizeXEvent(event, instance) {
+  if (isMPTapEvent(event)) {
+    event.x = event.detail.x;
+    event.y = event.detail.y;
+    event.clientX = event.detail.x;
+    event.clientY = event.detail.y;
+    const touch0 = event.touches && event.touches[0];
+    if (touch0) {
+      event.pageX = touch0.pageX;
+      event.pageY = touch0.pageY;
+      event.screenX = touch0.screenX;
+      event.screenY = touch0.screenY;
+    }
+  }
+  if (event.target) {
+    const oldTarget = event.target;
+    Object.defineProperty(event, "target", {
+      get() {
+        if (!event._target) {
+          event._target = createEventTarget(oldTarget, instance || void 0);
+        }
+        return event._target;
+      }
+    });
+  }
+  if (event.currentTarget) {
+    const oldCurrentTarget = event.currentTarget;
+    Object.defineProperty(event, "currentTarget", {
+      get() {
+        if (!event._currentTarget) {
+          event._currentTarget = createEventTarget(oldCurrentTarget, instance || void 0);
+        }
+        return event._currentTarget;
+      }
+    });
+  }
+}
+function patchMPEvent(event, instance) {
+  if (event.type && event.target) {
+    event.preventDefault = NOOP;
+    event.stopPropagation = NOOP;
+    event.stopImmediatePropagation = NOOP;
+    if (!hasOwn(event, "detail")) {
+      event.detail = {};
+    }
+    if (hasOwn(event, "markerId")) {
+      event.detail = typeof event.detail === "object" ? event.detail : {};
+      event.detail.markerId = event.markerId;
+    }
+    if (isPlainObject$1(event.detail) && hasOwn(event.detail, "checked") && !hasOwn(event.detail, "value")) {
+      event.detail.value = event.detail.checked;
+    }
+    if (isPlainObject$1(event.detail)) {
+      event.target = extend({}, event.target, event.detail);
+    }
+    {
+      normalizeXEvent(event, instance);
+    }
+  }
+}
+function patchStopImmediatePropagation(e2, value) {
+  if (isArray(value)) {
+    const originalStop = e2.stopImmediatePropagation;
+    e2.stopImmediatePropagation = () => {
+      originalStop && originalStop.call(e2);
+      e2._stopped = true;
+    };
+    return value.map((fn) => (e3) => !e3._stopped && fn(e3));
+  } else {
+    return value;
+  }
+}
+function vFor(source, renderItem) {
+  let ret;
+  if (isArray(source) || isString(source)) {
+    ret = new Array(source.length);
+    for (let i2 = 0, l2 = source.length; i2 < l2; i2++) {
+      ret[i2] = renderItem(source[i2], i2, i2);
+    }
+  } else if (typeof source === "number") {
+    if (!Number.isInteger(source)) {
+      warn(`The v-for range expect an integer value but got ${source}.`);
+      return [];
+    }
+    ret = new Array(source);
+    for (let i2 = 0; i2 < source; i2++) {
+      ret[i2] = renderItem(i2 + 1, i2, i2);
+    }
+  } else if (isObject(source)) {
+    if (source[Symbol.iterator]) {
+      ret = Array.from(source, (item, i2) => renderItem(item, i2, i2));
+    } else {
+      const keys = Object.keys(source);
+      ret = new Array(keys.length);
+      for (let i2 = 0, l2 = keys.length; i2 < l2; i2++) {
+        const key = keys[i2];
+        ret[i2] = renderItem(source[key], key, i2);
+      }
+    }
+  } else {
+    ret = [];
+  }
+  return ret;
+}
+function setRef(ref2, id, opts = {}) {
+  const { $templateRefs } = getCurrentInstance();
+  $templateRefs.push({ i: id, r: ref2, k: opts.k, f: opts.f });
 }
 function setUniElementId(id, options, ref2, refOpts) {
   const ins = getCurrentInstance();
@@ -5595,7 +5893,13 @@ function genIdWithVirtualHost(_ctx, idBinding) {
 function genUniElementId(_ctx, idBinding, genId) {
   return genIdWithVirtualHost(_ctx, idBinding) || genId || "";
 }
+const o$1 = (value, key) => vOn(value, key);
+const f$1 = (source, renderItem) => vFor(source, renderItem);
+const e$1 = (target, ...sources) => extend(target, ...sources);
+const n$1 = (value) => normalizeClass(value);
 const t$1 = (val) => toDisplayString(val);
+const p$1 = (props) => renderProps(props);
+const sr = (ref2, id, opts) => setRef(ref2, id, opts);
 const sei = setUniElementId;
 const gei = genUniElementId;
 function createApp$1(rootComponent, rootProps = null) {
@@ -5918,8 +6222,8 @@ function promisify$1(name, fn) {
     if (hasCallback(args)) {
       return wrapperReturnValue(name, invokeApi(name, fn, args, rest));
     }
-    return wrapperReturnValue(name, handlePromise(new Promise((resolve, reject) => {
-      invokeApi(name, fn, extend(args, { success: resolve, fail: reject }), rest);
+    return wrapperReturnValue(name, handlePromise(new Promise((resolve2, reject) => {
+      invokeApi(name, fn, extend(args, { success: resolve2, fail: reject }), rest);
     })));
   };
 }
@@ -6061,7 +6365,7 @@ class CanvasContext {
     this._element.cancelAnimationFrame(taskId);
   }
 }
-const createCanvasContextAsync = defineAsyncApi(API_CREATE_CANVAS_CONTEXT_ASYNC, (options, { resolve, reject }) => {
+const createCanvasContextAsync = defineAsyncApi(API_CREATE_CANVAS_CONTEXT_ASYNC, (options, { resolve: resolve2, reject }) => {
   const pages2 = getCurrentPages();
   const page = pages2[pages2.length - 1];
   if (!page || !page.$vm) {
@@ -6072,7 +6376,7 @@ const createCanvasContextAsync = defineAsyncApi(API_CREATE_CANVAS_CONTEXT_ASYNC,
     }).exec((res) => {
       if (res.length > 0 && res[0].node) {
         const result = res[0];
-        resolve(new CanvasContext(result.node, result.width, result.height));
+        resolve2(new CanvasContext(result.node, result.width, result.height));
       } else {
         reject("canvas id invalid.");
       }
@@ -6314,7 +6618,7 @@ function invokeGetPushCidCallbacks(cid2, errMsg) {
   getPushCidCallbacks.length = 0;
 }
 const API_GET_PUSH_CLIENT_ID = "getPushClientId";
-const getPushClientId = defineAsyncApi(API_GET_PUSH_CLIENT_ID, (_2, { resolve, reject }) => {
+const getPushClientId = defineAsyncApi(API_GET_PUSH_CLIENT_ID, (_2, { resolve: resolve2, reject }) => {
   Promise.resolve().then(() => {
     if (typeof enabled === "undefined") {
       enabled = false;
@@ -6323,7 +6627,7 @@ const getPushClientId = defineAsyncApi(API_GET_PUSH_CLIENT_ID, (_2, { resolve, r
     }
     getPushCidCallbacks.push((cid2, errMsg) => {
       if (cid2) {
-        resolve({ cid: cid2 });
+        resolve2({ cid: cid2 });
       } else {
         reject(errMsg);
       }
@@ -6396,9 +6700,9 @@ function promisify(name, api) {
     if (isFunction(options.success) || isFunction(options.fail) || isFunction(options.complete)) {
       return wrapperReturnValue(name, invokeApi(name, api, options, rest));
     }
-    return wrapperReturnValue(name, handlePromise(new Promise((resolve, reject) => {
+    return wrapperReturnValue(name, handlePromise(new Promise((resolve2, reject) => {
       invokeApi(name, api, extend({}, options, {
-        success: resolve,
+        success: resolve2,
         fail: reject
       }), rest);
     })));
@@ -7067,13 +7371,13 @@ function initRuntimeSocket(hosts, port, id) {
 }
 const SOCKET_TIMEOUT = 500;
 function tryConnectSocket(host2, port, id) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     const socket = index.connectSocket({
       url: `ws://${host2}:${port}/${id}`,
       multiple: true,
       // 支付宝小程序 是否开启多实例
       fail() {
-        resolve(null);
+        resolve2(null);
       }
     });
     const timer = setTimeout(() => {
@@ -7081,19 +7385,19 @@ function tryConnectSocket(host2, port, id) {
         code: 1006,
         reason: "connect timeout"
       });
-      resolve(null);
+      resolve2(null);
     }, SOCKET_TIMEOUT);
     socket.onOpen((e2) => {
       clearTimeout(timer);
-      resolve(socket);
+      resolve2(socket);
     });
     socket.onClose((e2) => {
       clearTimeout(timer);
-      resolve(null);
+      resolve2(null);
     });
     socket.onError((e2) => {
       clearTimeout(timer);
-      resolve(null);
+      resolve2(null);
     });
   });
 }
@@ -9120,19 +9424,118 @@ const pages = [
   new UTSJSONObject({
     path: "pages/index/index",
     style: new UTSJSONObject({
-      navigationBarTitleText: "uni-app x"
+      navigationBarTitleText: "首页"
+    })
+  }),
+  new UTSJSONObject({
+    path: "pages/login/login",
+    style: new UTSJSONObject({
+      navigationBarTitleText: "登录"
     })
   })
 ];
+const subPackages = [
+  new UTSJSONObject({
+    root: "pages/admin",
+    pages: [
+      new UTSJSONObject({
+        path: "tables/tables",
+        style: new UTSJSONObject({
+          navigationBarTitleText: "评分表管理"
+        })
+      }),
+      new UTSJSONObject({
+        path: "items/items",
+        style: new UTSJSONObject({
+          navigationBarTitleText: "评分项管理"
+        })
+      }),
+      new UTSJSONObject({
+        path: "subjects/subjects",
+        style: new UTSJSONObject({
+          navigationBarTitleText: "考核对象管理"
+        })
+      }),
+      new UTSJSONObject({
+        path: "users/users",
+        style: new UTSJSONObject({
+          navigationBarTitleText: "用户管理"
+        })
+      }),
+      new UTSJSONObject({
+        path: "stats/stats",
+        style: new UTSJSONObject({
+          navigationBarTitleText: "评分统计"
+        })
+      })
+    ]
+  }),
+  new UTSJSONObject({
+    root: "pages/rater",
+    pages: [
+      new UTSJSONObject({
+        path: "tables/tables",
+        style: new UTSJSONObject({
+          navigationBarTitleText: "我的评分表"
+        })
+      }),
+      new UTSJSONObject({
+        path: "rating/rating",
+        style: new UTSJSONObject({
+          navigationBarTitleText: "评分"
+        })
+      }),
+      new UTSJSONObject({
+        path: "history/history",
+        style: new UTSJSONObject({
+          navigationBarTitleText: "评分历史"
+        })
+      })
+    ]
+  }),
+  new UTSJSONObject({
+    root: "pages/user",
+    pages: [
+      new UTSJSONObject({
+        path: "profile/profile",
+        style: new UTSJSONObject({
+          navigationBarTitleText: "个人信息"
+        })
+      })
+    ]
+  })
+];
+const tabBar = new UTSJSONObject({
+  color: "#7A7E83",
+  selectedColor: "#3cc51f",
+  borderStyle: "black",
+  backgroundColor: "#ffffff",
+  list: [
+    new UTSJSONObject({
+      pagePath: "pages/index/index",
+      iconPath: "static/images/home.png",
+      selectedIconPath: "static/images/home_selected.png",
+      text: "首页"
+    }),
+    new UTSJSONObject({
+      pagePath: "pages/user/profile/profile",
+      iconPath: "static/images/user.png",
+      selectedIconPath: "static/images/user_selected.png",
+      text: "我的"
+    })
+  ]
+});
 const globalStyle = new UTSJSONObject({
   navigationBarTextStyle: "black",
-  navigationBarTitleText: "uni-app x",
+  navigationBarTitleText: "干部评分系统",
   navigationBarBackgroundColor: "#F8F8F8",
   backgroundColor: "#F8F8F8"
 });
 const uniIdRouter = new UTSJSONObject({});
 const e = new UTSJSONObject({
   pages,
+  subPackages,
+  tabBar,
   globalStyle,
   uniIdRouter
 });
@@ -9425,7 +9828,7 @@ class v {
 function I(e2) {
   return e2 && "string" == typeof e2 ? JSON.parse(e2) : e2;
 }
-const S = true, b = "mp-weixin", T = I(define_process_env_UNI_SECURE_NETWORK_CONFIG_default), A = b, P = I('{"address":["127.0.0.1","192.168.137.1","169.254.4.248","169.254.172.131","192.168.6.175"],"servePort":7000,"debugPort":9000,"initialLaunchType":"local","skipFiles":["<node_internals>/**","C:/Program Files/HBuilderX/plugins/unicloud/**/*.js"]}'), C = I('[{"provider":"aliyun","spaceName":"laoguan","spaceId":"mp-45f080bc-b7cb-4162-82af-169543c26542","clientSecret":"VfC0XQLptjGRnFv3OD14mA==","endpoint":"https://api.next.bspapp.com"}]') || [];
+const S = true, b = "mp-weixin", T = I(define_process_env_UNI_SECURE_NETWORK_CONFIG_default), A = b, P = I('{"address":["127.0.0.1","192.168.137.1","169.254.4.248","169.254.172.131","192.168.6.175"],"servePort":7001,"debugPort":9001,"initialLaunchType":"local","skipFiles":["<node_internals>/**","C:/Program Files/HBuilderX/plugins/unicloud/**/*.js"]}'), C = I('[{"provider":"aliyun","spaceName":"laoguan","spaceId":"mp-45f080bc-b7cb-4162-82af-169543c26542","clientSecret":"VfC0XQLptjGRnFv3OD14mA==","endpoint":"https://api.next.bspapp.com"}]') || [];
 let O = "";
 try {
   O = "__UNI__76C800D";
@@ -11884,7 +12287,7 @@ function Zs(e2) {
   } }));
 }
 const er = { tcb: xt, tencent: xt, aliyun: me, private: Ut, dcloud: Ut, alipay: Wt };
-let tr = new class {
+exports.tr = new class {
   init(e2) {
     let t2 = {};
     const n2 = er[e2.provider];
@@ -11959,26 +12362,33 @@ let tr = new class {
   const e2 = C;
   let t2 = {};
   if (e2 && 1 === e2.length)
-    t2 = e2[0], tr = tr.init(t2), tr._isDefault = true;
+    t2 = e2[0], exports.tr = exports.tr.init(t2), exports.tr._isDefault = true;
   else {
     const t3 = ["auth", "callFunction", "uploadFile", "deleteFile", "getTempFileURL", "downloadFile", "database", "getCurrentUSerInfo", "importObject"];
     let n2;
     n2 = e2 && e2.length > 0 ? "应用有多个服务空间，请通过uniCloud.init方法指定要使用的服务空间" : "应用未关联服务空间，请在uniCloud目录右键关联服务空间", t3.forEach((e3) => {
-      tr[e3] = function() {
+      exports.tr[e3] = function() {
         return console.error(n2), Promise.reject(new se({ code: "SYS_ERR", message: n2 }));
       };
     });
   }
-  if (Object.assign(tr, { get mixinDatacom() {
-    return Bs(tr);
-  } }), Ns(tr), tr.addInterceptor = M, tr.removeInterceptor = q, tr.interceptObject = j, "web" === A)
+  if (Object.assign(exports.tr, { get mixinDatacom() {
+    return Bs(exports.tr);
+  } }), Ns(exports.tr), exports.tr.addInterceptor = M, exports.tr.removeInterceptor = q, exports.tr.interceptObject = j, "web" === A)
     ;
 })();
 exports._export_sfc = _export_sfc;
 exports.createSSRApp = createSSRApp;
 exports.defineComponent = defineComponent;
+exports.e = e$1;
+exports.f = f$1;
 exports.gei = gei;
 exports.index = index;
+exports.n = n$1;
+exports.o = o$1;
+exports.p = p$1;
+exports.resolveComponent = resolveComponent;
 exports.sei = sei;
+exports.sr = sr;
 exports.t = t$1;
 //# sourceMappingURL=../../.sourcemap/mp-weixin/common/vendor.js.map
