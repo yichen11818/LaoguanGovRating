@@ -39,6 +39,16 @@ const _sfc_main = common_vendor.defineComponent({
         username: "",
         currentRole: "",
         newRoleIndex: 0
+      }),
+      // 密码重置数据
+      currentUser: new UTSJSONObject({}),
+      newPassword: "",
+      // 弹窗显示状态
+      popupVisible: new UTSJSONObject({
+        addUser: false,
+        editUser: false,
+        changeRole: false,
+        resetPassword: false
       })
     };
   },
@@ -99,7 +109,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         this.isLoading = false;
-        common_vendor.index.__f__("error", "at pages/admin/users/users.vue:248", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "加载失败，请检查网络",
           icon: "none"
@@ -122,11 +132,11 @@ const _sfc_main = common_vendor.defineComponent({
         roleIndex: 2
         // 默认为评分员
       };
-      this.$refs.addUserPopup.open();
+      this.popupVisible.addUser = true;
     },
     // 隐藏新增用户弹窗
     hideAddUserPopup() {
-      this.$refs.addUserPopup.close();
+      this.popupVisible.addUser = false;
     },
     // 处理表单角色变化
     handleFormRoleChange(e = null) {
@@ -181,7 +191,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/users/users.vue:342", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "创建失败，请检查网络",
           icon: "none"
@@ -197,11 +207,11 @@ const _sfc_main = common_vendor.defineComponent({
         password: "",
         name: user.name || ""
       };
-      this.$refs.editUserPopup.open();
+      this.popupVisible.editUser = true;
     },
     // 隐藏编辑用户弹窗
     hideEditUserPopup() {
-      this.$refs.editUserPopup.close();
+      this.popupVisible.editUser = false;
     },
     // 提交编辑用户
     submitEditUser() {
@@ -240,7 +250,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/users/users.vue:412", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "更新失败，请检查网络",
           icon: "none"
@@ -264,25 +274,44 @@ const _sfc_main = common_vendor.defineComponent({
           break;
         }
       }
+      if (roleIndex < 0 || roleIndex >= this.roleOptions.length - 1) {
+        roleIndex = 0;
+      }
       this.changeRoleData = {
         id: user._id,
         username: user.name || user.username,
         currentRole: user.role,
         newRoleIndex: roleIndex
       };
-      this.$refs.changeRolePopup.open();
+      this.popupVisible.changeRole = true;
     },
     // 隐藏更改角色弹窗
     hideChangeRolePopup() {
-      this.$refs.changeRolePopup.close();
+      this.popupVisible.changeRole = false;
     },
     // 处理新角色变化
     handleNewRoleChange(e = null) {
-      this.changeRoleData.newRoleIndex = e.detail.value;
+      this.changeRoleData.newRoleIndex = parseInt(e.detail.value);
     },
     // 提交更改角色
     submitChangeRole() {
-      const newRole = this.roleOptions[this.changeRoleData.newRoleIndex + 1].id;
+      if (this.changeRoleData.newRoleIndex < 0 || this.changeRoleData.newRoleIndex >= this.roleOptions.length - 1) {
+        common_vendor.index.showToast({
+          title: "无效的角色选择",
+          icon: "none"
+        });
+        return null;
+      }
+      const newRoleIndex = this.changeRoleData.newRoleIndex + 1;
+      const newRoleOption = this.roleOptions[newRoleIndex];
+      if (!newRoleOption || !newRoleOption.id) {
+        common_vendor.index.showToast({
+          title: "角色数据错误",
+          icon: "none"
+        });
+        return null;
+      }
+      const newRole = newRoleOption.id;
       if (newRole === this.changeRoleData.currentRole) {
         common_vendor.index.showToast({
           title: "新角色与当前角色相同",
@@ -321,7 +350,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/users/users.vue:509", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "更改失败，请检查网络",
           icon: "none"
@@ -375,19 +404,74 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/users/users.vue:567", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "删除失败，请检查网络",
           icon: "none"
         });
       });
+    },
+    // 重置密码
+    resetPassword(user = null) {
+      this.currentUser = user || new UTSJSONObject({});
+      common_vendor.index.showModal(new UTSJSONObject({
+        title: "确认重置密码",
+        content: `确定要重置用户"${user.name}"的密码吗？`,
+        success: (res) => {
+          if (res.confirm) {
+            this.doResetPassword();
+          }
+        }
+      }));
+    },
+    doResetPassword() {
+      const adminInfo = common_vendor.index.getStorageSync("userInfo");
+      const adminUsername = adminInfo ? UTS.JSON.parse(adminInfo).username : "管理员";
+      common_vendor.index.showLoading({ title: "处理中..." });
+      common_vendor.tr.callFunction({
+        name: "user",
+        data: new UTSJSONObject({
+          action: "resetUserPassword",
+          data: new UTSJSONObject({
+            userId: this.currentUser._id,
+            adminUsername
+          })
+        })
+      }).then((res) => {
+        common_vendor.index.hideLoading();
+        if (res.result.code === 0) {
+          this.newPassword = res.result.data.newPassword;
+          this.popupVisible.resetPassword = true;
+        } else {
+          common_vendor.index.showToast({
+            title: res.result.msg || "重置失败",
+            icon: "none"
+          });
+        }
+      }).catch((err = null) => {
+        common_vendor.index.hideLoading();
+        common_vendor.index.showToast({
+          title: "操作失败，请检查网络",
+          icon: "none"
+        });
+      });
+    },
+    copyPassword() {
+      common_vendor.index.setClipboardData({
+        data: this.newPassword,
+        success: () => {
+          common_vendor.index.showToast({
+            title: "密码已复制",
+            icon: "success"
+          });
+        }
+      });
+    },
+    closeResetPopup() {
+      this.popupVisible.resetPassword = false;
     }
   }
 });
-if (!Array) {
-  const _component_uni_popup = common_vendor.resolveComponent("uni-popup");
-  _component_uni_popup();
-}
 function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
   return common_vendor.e({
     a: common_vendor.t($data.roleOptions[$data.currentRoleIndex].name),
@@ -397,7 +481,7 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
     e: common_vendor.o((...args) => $options.showAddUserModal && $options.showAddUserModal(...args)),
     f: $data.users.length === 0
   }, $data.users.length === 0 ? {
-    g: common_assets._imports_0$2
+    g: common_assets._imports_0$1
   } : {}, {
     h: common_vendor.f($data.users, (user, index, i0) => {
       return common_vendor.e({
@@ -411,7 +495,8 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
       }, user.username !== $data.adminUsername ? {
         h: common_vendor.o(($event) => $options.confirmDelete(user._id), index)
       } : {}, {
-        i: index
+        i: common_vendor.o(($event) => $options.resetPassword(user), index),
+        j: index
       });
     }),
     i: $data.users.length > 0 && $data.hasMoreData
@@ -419,50 +504,70 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
     j: common_vendor.o((...args) => $options.loadMore && $options.loadMore(...args)),
     k: $data.isLoading
   } : {}, {
-    l: $data.formData.username,
-    m: common_vendor.o(($event) => $data.formData.username = $event.detail.value),
-    n: $data.formData.password,
-    o: common_vendor.o(($event) => $data.formData.password = $event.detail.value),
-    p: $data.formData.name,
-    q: common_vendor.o(($event) => $data.formData.name = $event.detail.value),
-    r: common_vendor.t($data.roleOptions[$data.formData.roleIndex].name),
-    s: common_vendor.o((...args) => $options.handleFormRoleChange && $options.handleFormRoleChange(...args)),
-    t: $data.formData.roleIndex,
-    v: $data.roleOptions,
-    w: common_vendor.o((...args) => $options.hideAddUserPopup && $options.hideAddUserPopup(...args)),
-    x: common_vendor.o((...args) => $options.submitAddUser && $options.submitAddUser(...args)),
-    y: common_vendor.sr("addUserPopup", "ccec08ac-0"),
-    z: common_vendor.p({
-      type: "center"
-    }),
-    A: $data.editData.username,
-    B: common_vendor.o(($event) => $data.editData.username = $event.detail.value),
-    C: $data.editData.name,
-    D: common_vendor.o(($event) => $data.editData.name = $event.detail.value),
-    E: $data.editData.password,
-    F: common_vendor.o(($event) => $data.editData.password = $event.detail.value),
-    G: common_vendor.o((...args) => $options.hideEditUserPopup && $options.hideEditUserPopup(...args)),
-    H: common_vendor.o((...args) => $options.submitEditUser && $options.submitEditUser(...args)),
-    I: common_vendor.sr("editUserPopup", "ccec08ac-1"),
-    J: common_vendor.p({
-      type: "center"
-    }),
-    K: common_vendor.t($data.changeRoleData.username),
-    L: common_vendor.t($options.getRoleName($data.changeRoleData.currentRole)),
-    M: common_vendor.n("role-text-" + $data.changeRoleData.currentRole),
-    N: common_vendor.t($data.roleOptions[$data.changeRoleData.newRoleIndex + 1].name),
-    O: common_vendor.o((...args) => $options.handleNewRoleChange && $options.handleNewRoleChange(...args)),
-    P: $data.changeRoleData.newRoleIndex,
-    Q: $data.roleOptions.slice(1),
-    R: common_vendor.o((...args) => $options.hideChangeRolePopup && $options.hideChangeRolePopup(...args)),
-    S: common_vendor.o((...args) => $options.submitChangeRole && $options.submitChangeRole(...args)),
-    T: common_vendor.sr("changeRolePopup", "ccec08ac-2"),
-    U: common_vendor.p({
-      type: "center"
-    }),
-    V: common_vendor.sei(common_vendor.gei(_ctx, ""), "view")
+    l: $data.popupVisible.addUser
+  }, $data.popupVisible.addUser ? {
+    m: common_vendor.o((...args) => $options.hideAddUserPopup && $options.hideAddUserPopup(...args))
+  } : {}, {
+    n: $data.popupVisible.addUser
+  }, $data.popupVisible.addUser ? {
+    o: $data.formData.username,
+    p: common_vendor.o(($event) => $data.formData.username = $event.detail.value),
+    q: $data.formData.password,
+    r: common_vendor.o(($event) => $data.formData.password = $event.detail.value),
+    s: $data.formData.name,
+    t: common_vendor.o(($event) => $data.formData.name = $event.detail.value),
+    v: common_vendor.t($data.roleOptions[$data.formData.roleIndex].name),
+    w: common_vendor.o((...args) => $options.handleFormRoleChange && $options.handleFormRoleChange(...args)),
+    x: $data.formData.roleIndex,
+    y: $data.roleOptions,
+    z: common_vendor.o((...args) => $options.hideAddUserPopup && $options.hideAddUserPopup(...args)),
+    A: common_vendor.o((...args) => $options.submitAddUser && $options.submitAddUser(...args))
+  } : {}, {
+    B: $data.popupVisible.editUser
+  }, $data.popupVisible.editUser ? {
+    C: common_vendor.o((...args) => $options.hideEditUserPopup && $options.hideEditUserPopup(...args))
+  } : {}, {
+    D: $data.popupVisible.editUser
+  }, $data.popupVisible.editUser ? {
+    E: $data.editData.username,
+    F: common_vendor.o(($event) => $data.editData.username = $event.detail.value),
+    G: $data.editData.name,
+    H: common_vendor.o(($event) => $data.editData.name = $event.detail.value),
+    I: $data.editData.password,
+    J: common_vendor.o(($event) => $data.editData.password = $event.detail.value),
+    K: common_vendor.o((...args) => $options.hideEditUserPopup && $options.hideEditUserPopup(...args)),
+    L: common_vendor.o((...args) => $options.submitEditUser && $options.submitEditUser(...args))
+  } : {}, {
+    M: $data.popupVisible.changeRole
+  }, $data.popupVisible.changeRole ? {
+    N: common_vendor.o((...args) => $options.hideChangeRolePopup && $options.hideChangeRolePopup(...args))
+  } : {}, {
+    O: $data.popupVisible.changeRole
+  }, $data.popupVisible.changeRole ? {
+    P: common_vendor.t($data.changeRoleData.username),
+    Q: common_vendor.t($options.getRoleName($data.changeRoleData.currentRole)),
+    R: common_vendor.n("role-text-" + $data.changeRoleData.currentRole),
+    S: common_vendor.t($data.changeRoleData.newRoleIndex >= 0 && $data.changeRoleData.newRoleIndex < $data.roleOptions.length - 1 ? $data.roleOptions[$data.changeRoleData.newRoleIndex + 1].name : "请选择角色"),
+    T: common_vendor.o((...args) => $options.handleNewRoleChange && $options.handleNewRoleChange(...args)),
+    U: $data.changeRoleData.newRoleIndex,
+    V: $data.roleOptions.slice(1),
+    W: common_vendor.o((...args) => $options.hideChangeRolePopup && $options.hideChangeRolePopup(...args)),
+    X: common_vendor.o((...args) => $options.submitChangeRole && $options.submitChangeRole(...args))
+  } : {}, {
+    Y: $data.popupVisible.resetPassword
+  }, $data.popupVisible.resetPassword ? {
+    Z: common_vendor.o((...args) => $options.closeResetPopup && $options.closeResetPopup(...args))
+  } : {}, {
+    aa: $data.popupVisible.resetPassword
+  }, $data.popupVisible.resetPassword ? {
+    ab: common_vendor.t($data.currentUser && $data.currentUser.username),
+    ac: common_vendor.t($data.currentUser && $data.currentUser.name),
+    ad: common_vendor.t($data.newPassword),
+    ae: common_vendor.o((...args) => $options.copyPassword && $options.copyPassword(...args)),
+    af: common_vendor.o((...args) => $options.closeResetPopup && $options.closeResetPopup(...args))
+  } : {}, {
+    ag: common_vendor.sei(common_vendor.gei(_ctx, ""), "view")
   });
 }
 const MiniProgramPage = /* @__PURE__ */ common_vendor._export_sfc(_sfc_main, [["render", _sfc_render]]);
 wx.createPage(MiniProgramPage);
-//# sourceMappingURL=../../../../.sourcemap/mp-weixin/pages/admin/users/users.js.map

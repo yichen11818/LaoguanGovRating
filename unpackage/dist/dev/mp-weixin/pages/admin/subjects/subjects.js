@@ -26,6 +26,11 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         department: "",
         position: "",
         tableIndex: 0
+      }),
+      // 弹窗显示状态
+      popupVisible: new UTSJSONObject({
+        addSubject: false,
+        editSubject: false
       })
     };
   },
@@ -61,7 +66,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/subjects/subjects.vue:185", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "加载失败，请检查网络",
           icon: "none"
@@ -108,7 +113,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         }
       }).catch((err = null) => {
         this.isLoading = false;
-        common_vendor.index.__f__("error", "at pages/admin/subjects/subjects.vue:239", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "加载失败，请检查网络",
           icon: "none"
@@ -139,11 +144,11 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         position: "",
         tableIndex: 0
       };
-      this.$refs.addSubjectPopup.open();
+      this.popupVisible.addSubject = true;
     },
     // 隐藏新增考核对象弹窗
     hideAddSubjectPopup() {
-      this.$refs.addSubjectPopup.close();
+      this.popupVisible.addSubject = false;
     },
     // 处理表单评分表变化
     handleFormTableChange(e = null) {
@@ -198,7 +203,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/subjects/subjects.vue:341", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "创建失败，请检查网络",
           icon: "none"
@@ -222,11 +227,11 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         position: subject.position || "",
         tableIndex
       };
-      this.$refs.editSubjectPopup.open();
+      this.popupVisible.editSubject = true;
     },
     // 隐藏编辑考核对象弹窗
     hideEditSubjectPopup() {
-      this.$refs.editSubjectPopup.close();
+      this.popupVisible.editSubject = false;
     },
     // 处理编辑评分表变化
     handleEditTableChange(e = null) {
@@ -283,7 +288,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/subjects/subjects.vue:440", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "更新失败，请检查网络",
           icon: "none"
@@ -337,7 +342,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/subjects/subjects.vue:498", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "删除失败，请检查网络",
           icon: "none"
@@ -346,10 +351,6 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
     }
   })
 }));
-if (!Array) {
-  const _component_uni_popup = common_vendor.resolveComponent("uni-popup");
-  _component_uni_popup();
-}
 function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
   return common_vendor.e({
     a: common_vendor.t($data.tables[$data.currentTableIndex].name),
@@ -359,7 +360,7 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
     e: common_vendor.o((...args) => $options.showAddSubjectModal && $options.showAddSubjectModal(...args)),
     f: $data.subjects.length === 0
   }, $data.subjects.length === 0 ? {
-    g: common_assets._imports_0$2
+    g: common_assets._imports_0$1
   } : {}, {
     h: common_vendor.f($data.subjects, (subject, index, i0) => {
       return common_vendor.e({
@@ -383,41 +384,46 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
     j: common_vendor.o((...args) => $options.loadMore && $options.loadMore(...args)),
     k: $data.isLoading
   } : {}, {
-    l: $data.formData.name,
-    m: common_vendor.o(($event) => $data.formData.name = $event.detail.value),
-    n: $data.formData.department,
-    o: common_vendor.o(($event) => $data.formData.department = $event.detail.value),
-    p: $data.formData.position,
-    q: common_vendor.o(($event) => $data.formData.position = $event.detail.value),
-    r: common_vendor.t($data.tables[$data.formData.tableIndex].name),
-    s: common_vendor.o((...args) => $options.handleFormTableChange && $options.handleFormTableChange(...args)),
-    t: $data.formData.tableIndex,
-    v: $data.tables,
-    w: common_vendor.o((...args) => $options.hideAddSubjectPopup && $options.hideAddSubjectPopup(...args)),
-    x: common_vendor.o((...args) => $options.submitAddSubject && $options.submitAddSubject(...args)),
-    y: common_vendor.sr("addSubjectPopup", "14cfb9b8-0"),
-    z: common_vendor.p({
-      type: "center"
-    }),
-    A: $data.editData.name,
-    B: common_vendor.o(($event) => $data.editData.name = $event.detail.value),
-    C: $data.editData.department,
-    D: common_vendor.o(($event) => $data.editData.department = $event.detail.value),
-    E: $data.editData.position,
-    F: common_vendor.o(($event) => $data.editData.position = $event.detail.value),
-    G: common_vendor.t($data.tables[$data.editData.tableIndex].name),
-    H: common_vendor.o((...args) => $options.handleEditTableChange && $options.handleEditTableChange(...args)),
-    I: $data.editData.tableIndex,
-    J: $data.tables,
-    K: common_vendor.o((...args) => $options.hideEditSubjectPopup && $options.hideEditSubjectPopup(...args)),
-    L: common_vendor.o((...args) => $options.submitEditSubject && $options.submitEditSubject(...args)),
-    M: common_vendor.sr("editSubjectPopup", "14cfb9b8-1"),
-    N: common_vendor.p({
-      type: "center"
-    }),
-    O: common_vendor.sei(common_vendor.gei(_ctx, ""), "view")
+    l: $data.popupVisible.addSubject
+  }, $data.popupVisible.addSubject ? {
+    m: common_vendor.o((...args) => $options.hideAddSubjectPopup && $options.hideAddSubjectPopup(...args))
+  } : {}, {
+    n: $data.popupVisible.addSubject
+  }, $data.popupVisible.addSubject ? {
+    o: $data.formData.name,
+    p: common_vendor.o(($event) => $data.formData.name = $event.detail.value),
+    q: $data.formData.department,
+    r: common_vendor.o(($event) => $data.formData.department = $event.detail.value),
+    s: $data.formData.position,
+    t: common_vendor.o(($event) => $data.formData.position = $event.detail.value),
+    v: common_vendor.t($data.tables[$data.formData.tableIndex].name),
+    w: common_vendor.o((...args) => $options.handleFormTableChange && $options.handleFormTableChange(...args)),
+    x: $data.formData.tableIndex,
+    y: $data.tables,
+    z: common_vendor.o((...args) => $options.hideAddSubjectPopup && $options.hideAddSubjectPopup(...args)),
+    A: common_vendor.o((...args) => $options.submitAddSubject && $options.submitAddSubject(...args))
+  } : {}, {
+    B: $data.popupVisible.editSubject
+  }, $data.popupVisible.editSubject ? {
+    C: common_vendor.o((...args) => $options.hideEditSubjectPopup && $options.hideEditSubjectPopup(...args))
+  } : {}, {
+    D: $data.popupVisible.editSubject
+  }, $data.popupVisible.editSubject ? {
+    E: $data.editData.name,
+    F: common_vendor.o(($event) => $data.editData.name = $event.detail.value),
+    G: $data.editData.department,
+    H: common_vendor.o(($event) => $data.editData.department = $event.detail.value),
+    I: $data.editData.position,
+    J: common_vendor.o(($event) => $data.editData.position = $event.detail.value),
+    K: common_vendor.t($data.tables[$data.editData.tableIndex].name),
+    L: common_vendor.o((...args) => $options.handleEditTableChange && $options.handleEditTableChange(...args)),
+    M: $data.editData.tableIndex,
+    N: $data.tables,
+    O: common_vendor.o((...args) => $options.hideEditSubjectPopup && $options.hideEditSubjectPopup(...args)),
+    P: common_vendor.o((...args) => $options.submitEditSubject && $options.submitEditSubject(...args))
+  } : {}, {
+    Q: common_vendor.sei(common_vendor.gei(_ctx, ""), "view")
   });
 }
 const MiniProgramPage = /* @__PURE__ */ common_vendor._export_sfc(_sfc_main, [["render", _sfc_render]]);
 wx.createPage(MiniProgramPage);
-//# sourceMappingURL=../../../../.sourcemap/mp-weixin/pages/admin/subjects/subjects.js.map

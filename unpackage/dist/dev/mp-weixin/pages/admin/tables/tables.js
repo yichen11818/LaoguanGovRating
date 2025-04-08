@@ -96,7 +96,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         this.isLoading = false;
-        common_vendor.index.__f__("error", "at pages/admin/tables/tables.vue:260", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "加载失败，请检查网络",
           icon: "none"
@@ -216,7 +216,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/tables/tables.vue:396", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "创建失败，请检查网络",
           icon: "none"
@@ -284,7 +284,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/tables/tables.vue:475", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "更新失败，请检查网络",
           icon: "none"
@@ -354,7 +354,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/tables/tables.vue:556", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "更换失败，请检查网络",
           icon: "none"
@@ -408,7 +408,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/tables/tables.vue:614", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "删除失败，请检查网络",
           icon: "none"
@@ -418,8 +418,12 @@ const _sfc_main = common_vendor.defineComponent({
   }
 });
 if (!Array) {
-  const _component_uni_popup = common_vendor.resolveComponent("uni-popup");
-  _component_uni_popup();
+  const _easycom_uni_popup2 = common_vendor.resolveComponent("uni-popup");
+  _easycom_uni_popup2();
+}
+const _easycom_uni_popup = () => "../../../uni_modules/uni-popup/components/uni-popup/uni-popup.js";
+if (!Math) {
+  _easycom_uni_popup();
 }
 function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
   return common_vendor.e({
@@ -430,73 +434,74 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
     e: common_vendor.o((...args) => $options.showAddTableModal && $options.showAddTableModal(...args)),
     f: $data.tables.length === 0
   }, $data.tables.length === 0 ? {
-    g: common_assets._imports_0$2
+    g: common_assets._imports_0$1
   } : {}, {
     h: common_vendor.f($data.tables, (table, index, i0) => {
       return {
         a: common_vendor.t(table.name),
         b: common_vendor.t($options.getTableTypeName(table.type)),
-        c: common_vendor.t(table.category || "无"),
-        d: common_vendor.t(table.rater),
-        e: common_vendor.t(table.items ? table.items.length : 0),
-        f: common_vendor.o(($event) => $options.editTable(table), index),
-        g: common_vendor.o(($event) => $options.showChangeRaterModal(table), index),
-        h: common_vendor.o(($event) => $options.confirmDelete(table._id), index),
+        c: common_vendor.o(($event) => $options.editTable(table), index),
+        d: common_vendor.o(($event) => $options.showChangeRaterModal(table), index),
+        e: common_vendor.o(($event) => $options.confirmDelete(table._id), index),
+        f: common_vendor.t(table.category || "无"),
+        g: common_vendor.t(table.rater),
+        h: common_vendor.t(table.items ? table.items.length : 0),
         i: index,
         j: common_vendor.o(($event) => $options.navigateToDetail(table._id), index)
       };
     }),
     i: $data.tables.length > 0 && $data.hasMoreData
-  }, $data.tables.length > 0 && $data.hasMoreData ? {
-    j: common_vendor.o((...args) => $options.loadMore && $options.loadMore(...args)),
-    k: $data.isLoading
-  } : {}, {
-    l: $data.formData.name,
-    m: common_vendor.o(($event) => $data.formData.name = $event.detail.value),
-    n: common_vendor.t($data.typeOptions[$data.formData.typeIndex].name),
-    o: common_vendor.o((...args) => $options.handleFormTypeChange && $options.handleFormTypeChange(...args)),
-    p: $data.formData.typeIndex,
-    q: $data.typeOptions,
-    r: $data.formData.category,
-    s: common_vendor.o(($event) => $data.formData.category = $event.detail.value),
-    t: common_vendor.t($data.raters[$data.currentRaterIndex].name || "请选择评分人"),
-    v: common_vendor.o((...args) => $options.handleRaterChange && $options.handleRaterChange(...args)),
-    w: $data.currentRaterIndex,
-    x: $data.raters,
-    y: common_vendor.o((...args) => $options.hideAddTablePopup && $options.hideAddTablePopup(...args)),
-    z: common_vendor.o((...args) => $options.submitAddTable && $options.submitAddTable(...args)),
-    A: common_vendor.sr("addTablePopup", "332f8e78-0"),
-    B: common_vendor.p({
+  }, $data.tables.length > 0 && $data.hasMoreData ? common_vendor.e({
+    j: !$data.isLoading
+  }, !$data.isLoading ? {} : {}, {
+    k: common_vendor.o((...args) => $options.loadMore && $options.loadMore(...args)),
+    l: $data.isLoading
+  }) : {}, {
+    m: $data.formData.name,
+    n: common_vendor.o(($event) => $data.formData.name = $event.detail.value),
+    o: common_vendor.t($data.typeOptions[$data.formData.typeIndex].name),
+    p: common_vendor.o((...args) => $options.handleFormTypeChange && $options.handleFormTypeChange(...args)),
+    q: $data.formData.typeIndex,
+    r: $data.typeOptions,
+    s: $data.formData.category,
+    t: common_vendor.o(($event) => $data.formData.category = $event.detail.value),
+    v: common_vendor.t($data.raters[$data.currentRaterIndex].name || "请选择评分人"),
+    w: common_vendor.o((...args) => $options.handleRaterChange && $options.handleRaterChange(...args)),
+    x: $data.currentRaterIndex,
+    y: $data.raters,
+    z: common_vendor.o((...args) => $options.hideAddTablePopup && $options.hideAddTablePopup(...args)),
+    A: common_vendor.o((...args) => $options.submitAddTable && $options.submitAddTable(...args)),
+    B: common_vendor.sr("addTablePopup", "332f8e78-0"),
+    C: common_vendor.p({
       type: "center"
     }),
-    C: $data.editData.name,
-    D: common_vendor.o(($event) => $data.editData.name = $event.detail.value),
-    E: common_vendor.t($data.typeOptions[$data.editData.typeIndex].name),
-    F: common_vendor.o((...args) => $options.handleEditTypeChange && $options.handleEditTypeChange(...args)),
-    G: $data.editData.typeIndex,
-    H: $data.typeOptions,
-    I: $data.editData.category,
-    J: common_vendor.o(($event) => $data.editData.category = $event.detail.value),
-    K: common_vendor.o((...args) => $options.hideEditTablePopup && $options.hideEditTablePopup(...args)),
-    L: common_vendor.o((...args) => $options.submitEditTable && $options.submitEditTable(...args)),
-    M: common_vendor.sr("editTablePopup", "332f8e78-1"),
-    N: common_vendor.p({
+    D: $data.editData.name,
+    E: common_vendor.o(($event) => $data.editData.name = $event.detail.value),
+    F: common_vendor.t($data.typeOptions[$data.editData.typeIndex].name),
+    G: common_vendor.o((...args) => $options.handleEditTypeChange && $options.handleEditTypeChange(...args)),
+    H: $data.editData.typeIndex,
+    I: $data.typeOptions,
+    J: $data.editData.category,
+    K: common_vendor.o(($event) => $data.editData.category = $event.detail.value),
+    L: common_vendor.o((...args) => $options.hideEditTablePopup && $options.hideEditTablePopup(...args)),
+    M: common_vendor.o((...args) => $options.submitEditTable && $options.submitEditTable(...args)),
+    N: common_vendor.sr("editTablePopup", "332f8e78-1"),
+    O: common_vendor.p({
       type: "center"
     }),
-    O: common_vendor.t($data.changeRaterData.currentRater),
-    P: common_vendor.t($data.raters[$data.changeRaterData.newRaterIndex].name || "请选择新评分人"),
-    Q: common_vendor.o((...args) => $options.handleNewRaterChange && $options.handleNewRaterChange(...args)),
-    R: $data.changeRaterData.newRaterIndex,
-    S: $data.raters,
-    T: common_vendor.o((...args) => $options.hideChangeRaterPopup && $options.hideChangeRaterPopup(...args)),
-    U: common_vendor.o((...args) => $options.submitChangeRater && $options.submitChangeRater(...args)),
-    V: common_vendor.sr("changeRaterPopup", "332f8e78-2"),
-    W: common_vendor.p({
+    P: common_vendor.t($data.changeRaterData.currentRater),
+    Q: common_vendor.t($data.raters[$data.changeRaterData.newRaterIndex].name || "请选择新评分人"),
+    R: common_vendor.o((...args) => $options.handleNewRaterChange && $options.handleNewRaterChange(...args)),
+    S: $data.changeRaterData.newRaterIndex,
+    T: $data.raters,
+    U: common_vendor.o((...args) => $options.hideChangeRaterPopup && $options.hideChangeRaterPopup(...args)),
+    V: common_vendor.o((...args) => $options.submitChangeRater && $options.submitChangeRater(...args)),
+    W: common_vendor.sr("changeRaterPopup", "332f8e78-2"),
+    X: common_vendor.p({
       type: "center"
     }),
-    X: common_vendor.sei(common_vendor.gei(_ctx, ""), "view")
+    Y: common_vendor.sei(common_vendor.gei(_ctx, ""), "view")
   });
 }
 const MiniProgramPage = /* @__PURE__ */ common_vendor._export_sfc(_sfc_main, [["render", _sfc_render]]);
 wx.createPage(MiniProgramPage);
-//# sourceMappingURL=../../../../.sourcemap/mp-weixin/pages/admin/tables/tables.js.map

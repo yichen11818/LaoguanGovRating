@@ -78,7 +78,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/items/items.vue:170", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "加载失败，请检查网络",
           icon: "none"
@@ -152,7 +152,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/items/items.vue:256", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "添加失败，请检查网络",
           icon: "none"
@@ -226,7 +226,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/items/items.vue:346", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "更新失败，请检查网络",
           icon: "none"
@@ -276,7 +276,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/items/items.vue:403", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "删除失败，请检查网络",
           icon: "none"
@@ -286,8 +286,12 @@ const _sfc_main = common_vendor.defineComponent({
   }
 });
 if (!Array) {
-  const _component_uni_popup = common_vendor.resolveComponent("uni-popup");
-  _component_uni_popup();
+  const _easycom_uni_popup2 = common_vendor.resolveComponent("uni-popup");
+  _easycom_uni_popup2();
+}
+const _easycom_uni_popup = () => "../../../uni_modules/uni-popup/components/uni-popup/uni-popup.js";
+if (!Math) {
+  _easycom_uni_popup();
 }
 function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
   return common_vendor.e({
@@ -304,7 +308,7 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
     g: common_vendor.o((...args) => $options.showAddItemModal && $options.showAddItemModal(...args)),
     h: $data.table.items && $data.table.items.length === 0
   }, $data.table.items && $data.table.items.length === 0 ? {
-    i: common_assets._imports_0$2
+    i: common_assets._imports_0$1
   } : {}, {
     j: common_vendor.f($data.table.items, (item, index, i0) => {
       return common_vendor.e({
@@ -348,4 +352,3 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
 }
 const MiniProgramPage = /* @__PURE__ */ common_vendor._export_sfc(_sfc_main, [["render", _sfc_render]]);
 wx.createPage(MiniProgramPage);
-//# sourceMappingURL=../../../../.sourcemap/mp-weixin/pages/admin/items/items.js.map

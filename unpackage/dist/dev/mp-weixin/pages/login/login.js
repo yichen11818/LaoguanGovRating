@@ -62,6 +62,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         });
         return null;
       }
+      console.log("开始登录流程:", new UTSJSONObject({ username: this.formData.username }));
       common_vendor.index.showLoading({
         title: "登录中..."
       });
@@ -76,20 +77,26 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         })
       }).then((res) => {
         common_vendor.index.hideLoading();
+        console.log("登录请求返回数据:", res.result);
         const _a = res.result, code = _a.code, msg = _a.msg, data = _a.data;
         if (code === 0) {
+          console.log("登录成功，获取到的用户信息:", data.user);
+          console.log("用户角色:", data.user.role);
           common_vendor.index.setStorageSync("token", data.token);
           common_vendor.index.setStorageSync("userInfo", UTS.JSON.stringify(data.user));
+          console.log("用户信息和token已保存到本地存储");
           common_vendor.index.showToast({
             title: "登录成功",
             icon: "success"
           });
           setTimeout(() => {
+            console.log("即将跳转到首页");
             common_vendor.index.switchTab({
               url: "/pages/index/index"
             });
           }, 1500);
         } else {
+          console.error("登录失败:", msg);
           common_vendor.index.showToast({
             title: msg || "登录失败",
             icon: "none"
@@ -97,7 +104,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/login/login.vue:176", err);
+        console.error("登录请求异常:", err);
         common_vendor.index.showToast({
           title: "登录失败，请检查网络",
           icon: "none"
@@ -190,7 +197,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/login/login.vue:285", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "注册失败，请检查网络",
           icon: "none"
@@ -239,7 +246,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/login/login.vue:343", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "申请失败，请检查网络",
           icon: "none"
@@ -288,4 +295,3 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
 }
 const MiniProgramPage = /* @__PURE__ */ common_vendor._export_sfc(_sfc_main, [["render", _sfc_render]]);
 wx.createPage(MiniProgramPage);
-//# sourceMappingURL=../../../.sourcemap/mp-weixin/pages/login/login.js.map

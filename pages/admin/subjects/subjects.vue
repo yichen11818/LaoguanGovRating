@@ -51,68 +51,66 @@
 		</view>
 		
 		<!-- 新增考核对象弹窗 -->
-		<uni-popup ref="addSubjectPopup" type="center">
-			<view class="popup-content">
-				<view class="popup-title">新增考核对象</view>
-				<view class="form-item">
-					<text class="form-label">姓名</text>
-					<input v-model="formData.name" class="form-input" placeholder="请输入考核对象姓名" />
-				</view>
-				<view class="form-item">
-					<text class="form-label">部门</text>
-					<input v-model="formData.department" class="form-input" placeholder="请输入部门" />
-				</view>
-				<view class="form-item">
-					<text class="form-label">职位</text>
-					<input v-model="formData.position" class="form-input" placeholder="请输入职位" />
-				</view>
-				<view class="form-item">
-					<text class="form-label">所属评分表</text>
-					<picker @change="handleFormTableChange" :value="formData.tableIndex" :range="tables" range-key="name">
-						<view class="form-picker">
-							<text>{{tables[formData.tableIndex].name}}</text>
-							<text class="picker-arrow">▼</text>
-						</view>
-					</picker>
-				</view>
-				<view class="popup-btns">
-					<button class="cancel-btn" size="mini" @click="hideAddSubjectPopup">取消</button>
-					<button class="confirm-btn" size="mini" @click="submitAddSubject">确定</button>
-				</view>
+		<view class="popup-overlay" v-if="popupVisible.addSubject" @click="hideAddSubjectPopup"></view>
+		<view class="popup-content" v-if="popupVisible.addSubject">
+			<view class="popup-title">新增考核对象</view>
+			<view class="form-item">
+				<text class="form-label">姓名</text>
+				<input v-model="formData.name" class="form-input" placeholder="请输入考核对象姓名" />
 			</view>
-		</uni-popup>
+			<view class="form-item">
+				<text class="form-label">部门</text>
+				<input v-model="formData.department" class="form-input" placeholder="请输入部门" />
+			</view>
+			<view class="form-item">
+				<text class="form-label">职位</text>
+				<input v-model="formData.position" class="form-input" placeholder="请输入职位" />
+			</view>
+			<view class="form-item">
+				<text class="form-label">所属评分表</text>
+				<picker @change="handleFormTableChange" :value="formData.tableIndex" :range="tables" range-key="name">
+					<view class="form-picker">
+						<text>{{tables[formData.tableIndex].name}}</text>
+						<text class="picker-arrow">▼</text>
+					</view>
+				</picker>
+			</view>
+			<view class="popup-btns">
+				<button class="cancel-btn" size="mini" @click="hideAddSubjectPopup">取消</button>
+				<button class="confirm-btn" size="mini" @click="submitAddSubject">确定</button>
+			</view>
+		</view>
 		
 		<!-- 编辑考核对象弹窗 -->
-		<uni-popup ref="editSubjectPopup" type="center">
-			<view class="popup-content">
-				<view class="popup-title">编辑考核对象</view>
-				<view class="form-item">
-					<text class="form-label">姓名</text>
-					<input v-model="editData.name" class="form-input" placeholder="请输入考核对象姓名" />
-				</view>
-				<view class="form-item">
-					<text class="form-label">部门</text>
-					<input v-model="editData.department" class="form-input" placeholder="请输入部门" />
-				</view>
-				<view class="form-item">
-					<text class="form-label">职位</text>
-					<input v-model="editData.position" class="form-input" placeholder="请输入职位" />
-				</view>
-				<view class="form-item">
-					<text class="form-label">所属评分表</text>
-					<picker @change="handleEditTableChange" :value="editData.tableIndex" :range="tables" range-key="name">
-						<view class="form-picker">
-							<text>{{tables[editData.tableIndex].name}}</text>
-							<text class="picker-arrow">▼</text>
-						</view>
-					</picker>
-				</view>
-				<view class="popup-btns">
-					<button class="cancel-btn" size="mini" @click="hideEditSubjectPopup">取消</button>
-					<button class="confirm-btn" size="mini" @click="submitEditSubject">确定</button>
-				</view>
+		<view class="popup-overlay" v-if="popupVisible.editSubject" @click="hideEditSubjectPopup"></view>
+		<view class="popup-content" v-if="popupVisible.editSubject">
+			<view class="popup-title">编辑考核对象</view>
+			<view class="form-item">
+				<text class="form-label">姓名</text>
+				<input v-model="editData.name" class="form-input" placeholder="请输入考核对象姓名" />
 			</view>
-		</uni-popup>
+			<view class="form-item">
+				<text class="form-label">部门</text>
+				<input v-model="editData.department" class="form-input" placeholder="请输入部门" />
+			</view>
+			<view class="form-item">
+				<text class="form-label">职位</text>
+				<input v-model="editData.position" class="form-input" placeholder="请输入职位" />
+			</view>
+			<view class="form-item">
+				<text class="form-label">所属评分表</text>
+				<picker @change="handleEditTableChange" :value="editData.tableIndex" :range="tables" range-key="name">
+					<view class="form-picker">
+						<text>{{tables[editData.tableIndex].name}}</text>
+						<text class="picker-arrow">▼</text>
+					</view>
+				</picker>
+			</view>
+			<view class="popup-btns">
+				<button class="cancel-btn" size="mini" @click="hideEditSubjectPopup">取消</button>
+				<button class="confirm-btn" size="mini" @click="submitEditSubject">确定</button>
+			</view>
+		</view>
 	</view>
 </template>
 
@@ -144,6 +142,12 @@
 					department: '',
 					position: '',
 					tableIndex: 0
+				},
+				
+				// 弹窗显示状态
+				popupVisible: {
+					addSubject: false,
+					editSubject: false
 				}
 			}
 		},
@@ -270,12 +274,12 @@
 					tableIndex: 0
 				};
 				
-				this.$refs.addSubjectPopup.open();
+				this.popupVisible.addSubject = true;
 			},
 			
 			// 隐藏新增考核对象弹窗
 			hideAddSubjectPopup() {
-				this.$refs.addSubjectPopup.close();
+				this.popupVisible.addSubject = false;
 			},
 			
 			// 处理表单评分表变化
@@ -367,12 +371,12 @@
 					tableIndex: tableIndex
 				};
 				
-				this.$refs.editSubjectPopup.open();
+				this.popupVisible.editSubject = true;
 			},
 			
 			// 隐藏编辑考核对象弹窗
 			hideEditSubjectPopup() {
-				this.$refs.editSubjectPopup.close();
+				this.popupVisible.editSubject = false;
 			},
 			
 			// 处理编辑评分表变化
@@ -588,29 +592,25 @@
 	
 	.info-row {
 		display: flex;
+		align-items: center;
 		margin-bottom: 10rpx;
 	}
 	
 	.subject-name {
 		font-size: 32rpx;
 		font-weight: bold;
-		margin-right: 20rpx;
 	}
 	
 	.subject-department {
-		font-size: 28rpx;
+		font-size: 24rpx;
 		color: #666;
 		background-color: #f5f5f5;
-		padding: 2rpx 16rpx;
-		border-radius: 6rpx;
+		padding: 4rpx 12rpx;
+		border-radius: 4rpx;
+		margin-left: 20rpx;
 	}
 	
-	.subject-position {
-		font-size: 28rpx;
-		color: #666;
-	}
-	
-	.subject-table {
+	.subject-position, .subject-table {
 		font-size: 28rpx;
 		color: #666;
 	}
@@ -654,11 +654,28 @@
 	}
 	
 	/* 弹窗样式 */
+	.popup-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		width: 100%;
+		height: 100%;
+		background-color: rgba(0, 0, 0, 0.5);
+		z-index: 9998;
+	}
+	
 	.popup-content {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
 		background-color: #fff;
 		border-radius: 16rpx;
 		width: 600rpx;
 		padding: 30rpx;
+		z-index: 9999;
 	}
 	
 	.popup-title {

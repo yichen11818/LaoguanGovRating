@@ -129,6 +129,8 @@
 					return;
 				}
 				
+				console.log('开始登录流程:', {username: this.formData.username});
+				
 				uni.showLoading({
 					title: '登录中...'
 				});
@@ -145,13 +147,17 @@
 					}
 				}).then(res => {
 					uni.hideLoading();
+					console.log('登录请求返回数据:', res.result);
 					const { code, msg, data } = res.result;
 					
 					if (code === 0) {
 						// 登录成功
+						console.log('登录成功，获取到的用户信息:', data.user);
+						console.log('用户角色:', data.user.role);
 						// 保存用户信息和token
 						uni.setStorageSync('token', data.token);
 						uni.setStorageSync('userInfo', JSON.stringify(data.user));
+						console.log('用户信息和token已保存到本地存储');
 						
 						uni.showToast({
 							title: '登录成功',
@@ -160,12 +166,14 @@
 						
 						// 跳转到首页
 						setTimeout(() => {
+							console.log('即将跳转到首页');
 							uni.switchTab({
 								url: '/pages/index/index'
 							});
 						}, 1500);
 					} else {
 						// 登录失败
+						console.error('登录失败:', msg);
 						uni.showToast({
 							title: msg || '登录失败',
 							icon: 'none'
@@ -173,7 +181,7 @@
 					}
 				}).catch(err => {
 					uni.hideLoading();
-					console.error(err);
+					console.error('登录请求异常:', err);
 					uni.showToast({
 						title: '登录失败，请检查网络',
 						icon: 'none'

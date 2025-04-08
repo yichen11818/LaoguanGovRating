@@ -38,21 +38,21 @@
 			
 			<view class="quick-actions">
 				<view class="action-title">快捷操作</view>
-				<view class="action-list">
+				<view class="action-grid">
 					<view class="action-item" @click="navigateTo('/pages/admin/tables/tables')">
-						<image class="action-icon" src="/static/images/table.png"></image>
+						<view class="action-icon-box icon-table"></view>
 						<text class="action-text">评分表管理</text>
 					</view>
 					<view class="action-item" @click="navigateTo('/pages/admin/subjects/subjects')">
-						<image class="action-icon" src="/static/images/subject.png"></image>
+						<view class="action-icon-box icon-subject"></view>
 						<text class="action-text">考核对象管理</text>
 					</view>
 					<view class="action-item" @click="navigateTo('/pages/admin/users/users')">
-						<image class="action-icon" src="/static/images/user_manage.png"></image>
+						<view class="action-icon-box icon-user"></view>
 						<text class="action-text">用户管理</text>
 					</view>
 					<view class="action-item" @click="navigateTo('/pages/admin/stats/stats')">
-						<image class="action-icon" src="/static/images/stats.png"></image>
+						<view class="action-icon-box icon-stats"></view>
 						<text class="action-text">统计分析</text>
 					</view>
 				</view>
@@ -164,55 +164,81 @@
 				const roleMap = {
 					'admin': '管理员',
 					'rater': '评分员',
-					'user': '普通用户'
+					'user': '普通用户',
+					3: '管理员',
+					2: '评分员',
+					1: '普通用户'
 				};
 				return roleMap[this.userInfo.role] || '未知角色';
 			}
 		},
 		onShow() {
-			// 检查登录状态，但不强制跳转
+			console.log('===== 首页显示 - 开始检查用户身份 =====');
 			const token = uni.getStorageSync('token');
-			const userInfo = uni.getStorageSync('userInfo') || {};
+			const userInfoStr = uni.getStorageSync('userInfo');
 			
-			if (token && userInfo.role) {
-				this.isLoggedIn = true;
-				this.userInfo = userInfo;
-				
-				// 根据角色加载不同数据
-				if (this.userInfo.role === 'admin') {
-					this.loadAdminStats();
-				} else if (this.userInfo.role === 'rater') {
-					this.loadRaterData();
+			console.log('检查登录: token存在?', !!token);
+			console.log('检查登录: userInfo存在?', !!userInfoStr);
+			
+			if (token && userInfoStr) {
+				try {
+					const userInfo = JSON.parse(userInfoStr);
+					this.isLoggedIn = true;
+					this.userInfo = userInfo;
+					console.log('用户已登录，身份信息:', userInfo);
+					console.log('用户角色:', userInfo.role, '类型:', typeof userInfo.role);
+					
+					this.checkRoleAndLogin();
+					this.loadData();
+				} catch (e) {
+					console.error('解析用户信息出错:', e);
+					this.resetUserState();
 				}
 			} else {
-				this.isLoggedIn = false;
-				this.userInfo = {
-					name: '游客',
-					role: 'user'
-				};
+				console.log('用户未登录或登录信息不完整，进入游客模式');
+				this.resetUserState();
 			}
 		},
 		methods: {
-			// 检查登录状态，如未登录则跳转
-			checkLogin() {
+			checkRoleAndLogin() {
+				console.log('检查用户角色:', this.userInfo.role, typeof this.userInfo.role);
+				
+				const isAdmin = this.userInfo.role === 'admin' || this.userInfo.role === 3;
+				const isRater = this.userInfo.role === 'rater' || this.userInfo.role === 2;
+				const isUser = this.userInfo.role === 'user' || this.userInfo.role === 1;
+				
+				if (isAdmin) {
+					console.log('当前用户是管理员');
+					this.isAdmin = true;
+					this.isRater = false;
+				} else if (isRater) {
+					console.log('当前用户是评分员');
+					this.isAdmin = false;
+					this.isRater = true;
+				} else {
+					console.log('当前用户是普通用户');
+					this.isAdmin = false;
+					this.isRater = false;
+				}
+			},
+			
+			navigateTo(url) {
 				if (!this.isLoggedIn) {
 					uni.navigateTo({
 						url: '/pages/login/login'
 					});
 					return false;
 				}
-				return true;
-			},
-			
-			navigateTo(url) {
-				// 点击导航时检查登录状态
-				if (!this.checkLogin()) return;
 				uni.navigateTo({ url });
 			},
 			
 			goToRating(tableId) {
-				// 点击去评分时检查登录状态
-				if (!this.checkLogin()) return;
+				if (!this.isLoggedIn) {
+					uni.navigateTo({
+						url: '/pages/login/login'
+					});
+					return false;
+				}
 				uni.navigateTo({
 					url: `/pages/rater/rating/rating?tableId=${tableId}`
 				});
@@ -226,9 +252,7 @@
 				};
 				return typeMap[type] || '未知类型';
 			},
-			// 加载管理员统计数据
 			loadAdminStats() {
-				// 调用云函数获取统计数据
 				uniCloud.callFunction({
 					name: 'ratingTable',
 					data: {
@@ -267,7 +291,6 @@
 					}
 				});
 				
-				// 获取评分完成率
 				uniCloud.callFunction({
 					name: 'rating',
 					data: {
@@ -289,9 +312,7 @@
 					}
 				});
 			},
-			// 加载评分员数据
 			loadRaterData() {
-				// 获取分配给当前用户的评分表
 				uniCloud.callFunction({
 					name: 'ratingTable',
 					data: {
@@ -305,12 +326,9 @@
 						const tables = res.result.data.list || [];
 						this.raterStats.tableCount = tables.length;
 						
-						// 只显示前5个
 						this.tables = tables.slice(0, 5);
 						
-						// 获取每个表的评分完成情况
 						this.tables.forEach((table, index) => {
-							// 获取该表的考核对象
 							uniCloud.callFunction({
 								name: 'subject',
 								data: {
@@ -323,7 +341,6 @@
 								const subjects = subjectRes.result.data.list || [];
 								const totalSubjects = subjects.length;
 								
-								// 获取该表的评分记录
 								uniCloud.callFunction({
 									name: 'rating',
 									data: {
@@ -337,11 +354,9 @@
 									const ratings = ratingRes.result.data.list || [];
 									const ratedCount = ratings.length;
 									
-									// 计算完成率
 									const completion = totalSubjects > 0 ? Math.round((ratedCount / totalSubjects) * 100) : 0;
 									this.$set(this.tables[index], 'completion', completion);
 									
-									// 统计已评分和待评分数量
 									this.raterStats.ratedCount += ratedCount;
 									this.raterStats.pendingCount += (totalSubjects - ratedCount);
 								});
@@ -349,18 +364,66 @@
 						});
 					}
 				});
+			},
+			resetUserState() {
+				this.isLoggedIn = false;
+				this.userInfo = {
+					name: '游客',
+					role: 'user'
+				};
+			},
+			loadData() {
+				if (this.isAdmin) {
+					this.loadAdminStats();
+				} else if (this.isRater) {
+					this.loadRaterData();
+				}
 			}
 		}
 	}
 </script>
 
 <style>
-	.container {
-		padding: 30rpx;
+	/* 基础变量定义 */
+	page {
+		--primary-color: #07c160;
+		--secondary-color: #1989fa;
+		--danger-color: #e64340;
+		--warning-color: #ff9900;
+		--info-color: #909399;
+		--text-dark: #333;
+		--text-normal: #666;
+		--text-light: #999;
+		--bg-light: #f8f8f8;
+		--bg-white: #fff;
+		--border-color: #eee;
+		--border-light: #f5f5f5;
+		--shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+		--radius: 16rpx;
+		--padding-lg: 30rpx;
+		--padding-md: 20rpx;
+		--padding-sm: 10rpx;
+		--margin-lg: 40rpx;
+		--margin-md: 20rpx;
+		--margin-sm: 10rpx;
+		--font-lg: 36rpx;
+		--font-md: 30rpx;
+		--font-sm: 26rpx;
+		--font-xs: 24rpx;
 	}
 	
+	.container {
+		padding: var(--padding-lg);
+		background-color: var(--bg-light);
+		min-height: 100vh;
+		box-sizing: border-box;
+		width: 100%;
+	}
+	
+	/* 头部区域 */
 	.header {
-		margin-bottom: 30rpx;
+		margin-bottom: var(--margin-lg);
+		width: 100%;
 	}
 	
 	.welcome {
@@ -369,39 +432,37 @@
 	}
 	
 	.welcome-text {
-		font-size: 36rpx;
+		font-size: var(--font-lg);
 		font-weight: bold;
-		margin-right: 20rpx;
+		margin-right: var(--margin-md);
 	}
 	
 	.role-tag {
-		font-size: 24rpx;
+		font-size: var(--font-xs);
 		padding: 4rpx 16rpx;
 		border-radius: 20rpx;
-		color: #fff;
+		color: var(--bg-white);
 	}
 	
-	.role-admin {
-		background-color: #e64340;
-	}
+	.role-admin { background-color: var(--danger-color); }
+	.role-rater { background-color: var(--primary-color); }
+	.role-user { background-color: var(--secondary-color); }
 	
-	.role-rater {
-		background-color: #07c160;
-	}
-	
-	.role-user {
-		background-color: #1989fa;
+	/* 面板通用样式 */
+	.admin-panel, .rater-panel, .user-panel {
+		width: 100%;
 	}
 	
 	.panel-header {
-		margin-bottom: 30rpx;
+		margin-bottom: var(--margin-md);
+		width: 100%;
 	}
 	
 	.panel-title {
-		font-size: 32rpx;
+		font-size: var(--font-md);
 		font-weight: bold;
 		position: relative;
-		padding-left: 20rpx;
+		padding-left: var(--padding-md);
 	}
 	
 	.panel-title::before {
@@ -411,8 +472,19 @@
 		top: 6rpx;
 		width: 8rpx;
 		height: 32rpx;
-		background-color: #07c160;
+		background-color: var(--primary-color);
 		border-radius: 4rpx;
+	}
+	
+	/* 卡片基础样式 */
+	.card-base {
+		background-color: var(--bg-white);
+		border-radius: var(--radius);
+		padding: var(--padding-lg);
+		box-shadow: var(--shadow);
+		margin-bottom: var(--margin-md);
+		width: 100%;
+		box-sizing: border-box;
 	}
 	
 	/* 统计卡片样式 */
@@ -420,172 +492,296 @@
 		display: flex;
 		flex-wrap: wrap;
 		justify-content: space-between;
-		margin-bottom: 40rpx;
+		margin-bottom: var(--margin-lg);
+		width: 100%;
 	}
 	
 	.stat-card {
 		width: 48%;
-		background-color: #f8f8f8;
-		border-radius: 16rpx;
-		padding: 30rpx;
+		background-color: var(--bg-white);
+		border-radius: var(--radius);
+		padding: var(--padding-lg);
 		box-sizing: border-box;
-		margin-bottom: 20rpx;
-		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+		margin-bottom: var(--margin-md);
+		box-shadow: var(--shadow);
+		transition: transform 0.3s ease;
+	}
+	
+	.stat-card:active {
+		transform: scale(0.98);
 	}
 	
 	.stat-num {
 		font-size: 42rpx;
 		font-weight: bold;
-		color: #333;
+		color: var(--text-dark);
 		display: block;
-		margin-bottom: 10rpx;
+		margin-bottom: var(--margin-sm);
 	}
 	
 	.stat-label {
-		font-size: 26rpx;
-		color: #999;
+		font-size: var(--font-sm);
+		color: var(--text-light);
 	}
 	
 	/* 快捷操作样式 */
 	.quick-actions {
-		margin-top: 40rpx;
+		margin-top: var(--margin-lg);
+		width: 100%;
+		background-color: var(--bg-white);
+		border-radius: var(--radius);
+		padding: var(--padding-lg);
+		box-shadow: var(--shadow);
+		box-sizing: border-box;
 	}
 	
 	.action-title {
-		font-size: 30rpx;
+		font-size: var(--font-md);
 		font-weight: bold;
-		margin-bottom: 20rpx;
+		margin-bottom: var(--margin-lg);
+		padding-bottom: var(--padding-md);
+		border-bottom: 1rpx solid var(--border-light);
 	}
 	
-	.action-list {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: space-between;
+	.action-grid {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: var(--margin-md);
+		width: 100%;
 	}
 	
 	.action-item {
-		width: 23%;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		margin-bottom: 30rpx;
+		justify-content: center;
+		transition: transform 0.3s ease;
+		box-sizing: border-box;
+		padding: 10rpx;
+		text-align: center;
 	}
 	
-	.action-icon {
-		width: 80rpx;
-		height: 80rpx;
-		margin-bottom: 10rpx;
+	@media screen and (max-width: 500px) {
+		.stat-card {
+			width: 100%;
+		}
+		
+		.action-grid {
+			grid-template-columns: repeat(2, 1fr);
+		}
+		
+		.action-item {
+			padding: 0 var(--padding-md);
+			margin-bottom: var(--margin-lg);
+		}
+	}
+	
+	.action-item:active {
+		transform: scale(0.95);
+	}
+	
+	.action-icon-box {
+		width: 100rpx;
+		height: 100rpx;
+		margin-bottom: var(--margin-md);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 50%;
+		color: var(--bg-white);
+		font-size: 46rpx;
+		position: relative;
+		box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+	}
+	
+	/* 使用伪元素为图标盒子创建内容 */
+	.action-icon-box::before {
+		font-weight: bold;
+		position: relative;
+		z-index: 2;
+	}
+	
+	.action-icon-box::after {
+		content: '';
+		position: absolute;
+		width: 85%;
+		height: 85%;
+		border-radius: 50%;
+		background-color: rgba(255, 255, 255, 0.2);
+		z-index: 1;
+	}
+	
+	.icon-table {
+		background-color: var(--primary-color);
+	}
+	
+	.icon-table::before {
+		content: "表";
+	}
+	
+	.icon-subject {
+		background-color: var(--secondary-color);
+	}
+	
+	.icon-subject::before {
+		content: "人";
+	}
+	
+	.icon-user {
+		background-color: var(--warning-color);
+	}
+	
+	.icon-user::before {
+		content: "员";
+	}
+	
+	.icon-stats {
+		background-color: var(--info-color);
+	}
+	
+	.icon-stats::before {
+		content: "统";
 	}
 	
 	.action-text {
-		font-size: 26rpx;
-		color: #333;
+		font-size: var(--font-sm);
+		color: var(--text-dark);
 		text-align: center;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		width: 100%;
 	}
 	
 	/* 评分员界面样式 */
 	.rater-stats {
 		display: flex;
 		justify-content: space-between;
-		margin-bottom: 40rpx;
+		margin-bottom: var(--margin-lg);
+		width: 100%;
 	}
 	
 	.rater-stats .stat-card {
 		width: 32%;
 	}
 	
+	@media screen and (max-width: 500px) {
+		.rater-stats .stat-card {
+			width: 100%;
+		}
+	}
+	
 	.table-list {
-		background-color: #fff;
-		border-radius: 16rpx;
-		padding: 30rpx;
-		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+		background-color: var(--bg-white);
+		border-radius: var(--radius);
+		padding: var(--padding-lg);
+		box-shadow: var(--shadow);
+		width: 100%;
+		box-sizing: border-box;
 	}
 	
 	.list-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 20rpx;
-		padding-bottom: 20rpx;
-		border-bottom: 1rpx solid #eee;
+		margin-bottom: var(--margin-md);
+		padding-bottom: var(--padding-md);
+		border-bottom: 1rpx solid var(--border-color);
+		width: 100%;
 	}
 	
 	.list-title {
-		font-size: 30rpx;
+		font-size: var(--font-md);
 		font-weight: bold;
 	}
 	
 	.more-link {
-		font-size: 26rpx;
-		color: #07c160;
+		font-size: var(--font-xs);
+		color: var(--primary-color);
 	}
 	
 	.no-data {
 		padding: 60rpx 0;
 		text-align: center;
+		width: 100%;
 	}
 	
 	.no-data-text {
-		font-size: 28rpx;
-		color: #999;
+		font-size: var(--font-sm);
+		color: var(--text-light);
 	}
 	
 	.table-item {
-		padding: 20rpx 0;
-		border-bottom: 1rpx solid #f5f5f5;
+		padding: var(--padding-md) 0;
+		border-bottom: 1rpx solid var(--border-light);
+		transition: background-color 0.3s ease;
+		width: 100%;
+	}
+	
+	.table-item:active {
+		background-color: var(--bg-light);
+	}
+	
+	.table-item:last-child {
+		border-bottom: none;
 	}
 	
 	.table-info {
 		display: flex;
 		justify-content: space-between;
-		margin-bottom: 10rpx;
+		margin-bottom: var(--margin-sm);
+		width: 100%;
 	}
 	
 	.table-name {
-		font-size: 30rpx;
+		font-size: var(--font-md);
 		font-weight: bold;
 	}
 	
 	.table-type {
-		font-size: 24rpx;
-		color: #666;
-		background-color: #f5f5f5;
+		font-size: var(--font-xs);
+		color: var(--text-normal);
+		background-color: var(--bg-light);
 		padding: 2rpx 12rpx;
 		border-radius: 6rpx;
 	}
 	
 	.table-category {
-		font-size: 26rpx;
-		color: #999;
+		font-size: var(--font-xs);
+		color: var(--text-light);
 		margin-bottom: 16rpx;
 		display: block;
 	}
 	
 	.table-progress {
-		margin-top: 20rpx;
+		margin-top: var(--margin-md);
+		width: 100%;
 	}
 	
 	.progress-text {
-		font-size: 24rpx;
-		color: #666;
+		font-size: var(--font-xs);
+		color: var(--text-normal);
 		margin-top: 6rpx;
 		display: block;
 	}
 	
 	/* 普通用户界面样式 */
 	.user-info {
-		background-color: #fff;
-		border-radius: 16rpx;
-		padding: 30rpx;
-		margin-bottom: 40rpx;
-		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+		background-color: var(--bg-white);
+		border-radius: var(--radius);
+		padding: var(--padding-lg);
+		margin-bottom: var(--margin-lg);
+		box-shadow: var(--shadow);
+		width: 100%;
+		box-sizing: border-box;
 	}
 	
 	.info-item {
 		display: flex;
-		margin-bottom: 20rpx;
-		padding-bottom: 20rpx;
-		border-bottom: 1rpx solid #f5f5f5;
+		margin-bottom: var(--margin-md);
+		padding-bottom: var(--padding-md);
+		border-bottom: 1rpx solid var(--border-light);
+		width: 100%;
 	}
 	
 	.info-item:last-child {
@@ -596,37 +792,39 @@
 	
 	.info-label {
 		width: 160rpx;
-		font-size: 28rpx;
-		color: #666;
+		font-size: var(--font-sm);
+		color: var(--text-normal);
 	}
 	
 	.info-value {
 		flex: 1;
-		font-size: 28rpx;
-		color: #333;
+		font-size: var(--font-sm);
+		color: var(--text-dark);
 	}
 	
 	.notice-box {
-		background-color: #fff;
-		border-radius: 16rpx;
+		background-color: var(--bg-white);
+		border-radius: var(--radius);
 		overflow: hidden;
-		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+		box-shadow: var(--shadow);
+		width: 100%;
+		box-sizing: border-box;
 	}
 	
 	.notice-title {
-		background-color: #f8f8f8;
-		padding: 20rpx 30rpx;
-		font-size: 30rpx;
+		background-color: var(--bg-light);
+		padding: var(--padding-md) var(--padding-lg);
+		font-size: var(--font-md);
 		font-weight: bold;
 	}
 	
 	.notice-content {
-		padding: 30rpx;
+		padding: var(--padding-lg);
 	}
 	
 	.notice-text {
-		font-size: 28rpx;
-		color: #666;
+		font-size: var(--font-sm);
+		color: var(--text-normal);
 		line-height: 1.6;
 	}
 </style> 

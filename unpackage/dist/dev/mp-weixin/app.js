@@ -17,16 +17,16 @@ if (!Math) {
 }
 const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
   onLaunch: function() {
-    common_vendor.index.__f__("log", "at App.uvue:5", "App Launch");
+    console.log("App Launch");
   },
   onShow: function() {
-    common_vendor.index.__f__("log", "at App.uvue:8", "App Show");
+    console.log("App Show");
   },
   onHide: function() {
-    common_vendor.index.__f__("log", "at App.uvue:11", "App Hide");
+    console.log("App Hide");
   },
   onExit: function() {
-    common_vendor.index.__f__("log", "at App.uvue:32", "App Exit");
+    console.log("App Exit");
   }
 }));
 function createApp() {
@@ -37,4 +37,3 @@ function createApp() {
 }
 createApp().app.mount("#app");
 exports.createApp = createApp;
-//# sourceMappingURL=../.sourcemap/mp-weixin/app.js.map

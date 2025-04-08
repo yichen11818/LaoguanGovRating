@@ -81,7 +81,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/rater/rating/rating.vue:145", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "加载失败，请检查网络",
           icon: "none"
@@ -223,7 +223,7 @@ const _sfc_main = common_vendor.defineComponent({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/rater/rating/rating.vue:312", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "提交失败，请检查网络",
           icon: "none"
@@ -268,11 +268,10 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
   } : {}, {
     q: $data.subjects.length === 0
   }, $data.subjects.length === 0 ? {
-    r: common_assets._imports_0$2
+    r: common_assets._imports_0$1
   } : {}, {
     s: common_vendor.sei(common_vendor.gei(_ctx, ""), "view")
   });
 }
 const MiniProgramPage = /* @__PURE__ */ common_vendor._export_sfc(_sfc_main, [["render", _sfc_render]]);
 wx.createPage(MiniProgramPage);
-//# sourceMappingURL=../../../../.sourcemap/mp-weixin/pages/rater/rating/rating.js.map

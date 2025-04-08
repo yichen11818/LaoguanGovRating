@@ -50,6 +50,8 @@ exports.main = async (event, context) => {
       return await approveResetRequest(data);
     case 'rejectResetRequest':
       return await rejectResetRequest(data);
+    case 'resetUserPassword':
+      return await resetUserPassword(data);
     default:
       return {
         code: -1,
@@ -178,14 +180,30 @@ async function register(data) {
 
 // 获取当前登录用户的信息
 async function getUserInfo(data) {
-  // 通过token获取用户信息，实际项目中应使用uni-id等鉴权
-  const { token } = data;
-  const tokenInfo = await token;  // 假设云函数中有token信息
-  
+  // 获取当前登录的用户名，直接从客户端获取
+  // 注意：实际项目中应该使用更安全的方式，如uni-id token验证
   try {
-    const userInfo = await userCollection.where({
-      username: tokenInfo ? tokenInfo.username : context.CLIENTIP
-    }).get();
+    // 从客户端保存的用户信息中获取用户名
+    const { username } = data;
+    console.log('getUserInfo 被调用，参数:', data);
+    
+    // 如果没有传入用户名，尝试从上下文获取
+    if (!username) {
+      console.log('未传入username，从JWT或authState获取');
+      // 可以从JWT或其他认证信息中获取
+      if (!context || !context.CLIENTIP) {
+        return {
+          code: -1,
+          msg: '获取用户信息失败，未提供用户标识'
+        };
+      }
+    }
+    
+    // 查询用户
+    const userQuery = username ? { username } : { username: context.CLIENTIP };
+    console.log('查询条件:', userQuery);
+    
+    const userInfo = await userCollection.where(userQuery).get();
     
     if (userInfo.data.length === 0) {
       return {
@@ -204,6 +222,7 @@ async function getUserInfo(data) {
       data: user
     };
   } catch (e) {
+    console.error('getUserInfo错误:', e);
     return {
       code: -1,
       msg: '获取用户信息失败',
@@ -214,9 +233,15 @@ async function getUserInfo(data) {
 
 // 更新用户基本信息
 async function updateUserInfo(data) {
-  const { name, workUnit } = data;
-  // 这里应该从token中获取用户ID，实际项目中使用uni-id
-  const username = context.CLIENTIP; // 示例，实际不会这样用
+  const { name, workUnit, username } = data;
+  console.log('updateUserInfo被调用，参数:', data);
+  
+  if (!username) {
+    return {
+      code: -1,
+      msg: '未提供用户标识'
+    };
+  }
   
   try {
     // 只允许修改自己的信息
@@ -239,6 +264,7 @@ async function updateUserInfo(data) {
       msg: '更新个人信息成功'
     };
   } catch (e) {
+    console.error('updateUserInfo错误:', e);
     return {
       code: -1,
       msg: '更新个人信息失败',
@@ -249,9 +275,15 @@ async function updateUserInfo(data) {
 
 // 用户修改自己的密码
 async function changePassword(data) {
-  const { oldPassword, newPassword } = data;
-  // 这里应该从token中获取用户ID
-  const username = context.CLIENTIP; // 示例，实际不会这样用
+  const { oldPassword, newPassword, username } = data;
+  console.log('changePassword被调用，参数:', data);
+  
+  if (!username) {
+    return {
+      code: -1,
+      msg: '未提供用户标识'
+    };
+  }
   
   if (!oldPassword || !newPassword) {
     return {
@@ -298,6 +330,7 @@ async function changePassword(data) {
       msg: '密码修改成功'
     };
   } catch (e) {
+    console.error('changePassword错误:', e);
     return {
       code: -1,
       msg: '密码修改失败',
@@ -636,6 +669,64 @@ async function rejectResetRequest(data) {
     return {
       code: -1,
       msg: '处理密码重置申请失败',
+      error: e.message
+    };
+  }
+}
+
+// 管理员直接重置用户密码
+async function resetUserPassword(data) {
+  const { userId, adminUsername } = data;
+  
+  if (!userId || !adminUsername) {
+    return {
+      code: -1,
+      msg: '参数错误'
+    };
+  }
+  
+  try {
+    // 检查用户是否存在
+    const userInfo = await userCollection.doc(userId).get();
+    
+    if (userInfo.data.length === 0) {
+      return {
+        code: -1,
+        msg: '用户不存在'
+      };
+    }
+    
+    // 生成随机密码
+    const newPassword = generateSecurePassword(8);
+    
+    // 重置用户密码
+    await userCollection.doc(userId).update({
+      password: encryptPassword(newPassword)
+    });
+    
+    // 记录此操作（可选，用于审计）
+    await db.collection('admin_logs').add({
+      type: 'reset_password',
+      userId: userId,
+      adminUsername: adminUsername,
+      time: new Date(),
+      details: '管理员直接重置密码'
+    }).catch(err => {
+      // 记录日志失败不影响主流程
+      console.error('记录日志失败:', err);
+    });
+    
+    return {
+      code: 0,
+      msg: '密码重置成功',
+      data: {
+        newPassword: newPassword
+      }
+    };
+  } catch (e) {
+    return {
+      code: -1,
+      msg: '密码重置失败',
       error: e.message
     };
   }

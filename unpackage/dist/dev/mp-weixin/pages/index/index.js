@@ -1,6 +1,5 @@
 "use strict";
 const common_vendor = require("../../common/vendor.js");
-const common_assets = require("../../common/assets.js");
 const _sfc_main = common_vendor.defineComponent({
   data() {
     return {
@@ -25,49 +24,74 @@ const _sfc_main = common_vendor.defineComponent({
       const roleMap = new UTSJSONObject({
         "admin": "管理员",
         "rater": "评分员",
-        "user": "普通用户"
+        "user": "普通用户",
+        3: "管理员",
+        2: "评分员",
+        1: "普通用户"
       });
       return roleMap[this.userInfo.role] || "未知角色";
     }
   },
   onShow() {
+    console.log("===== 首页显示 - 开始检查用户身份 =====");
     const token = common_vendor.index.getStorageSync("token");
-    const userInfo = common_vendor.index.getStorageSync("userInfo") || new UTSJSONObject({});
-    if (token && userInfo.role) {
-      this.isLoggedIn = true;
-      this.userInfo = userInfo;
-      if (this.userInfo.role === "admin") {
-        this.loadAdminStats();
-      } else if (this.userInfo.role === "rater") {
-        this.loadRaterData();
+    const userInfoStr = common_vendor.index.getStorageSync("userInfo");
+    console.log("检查登录: token存在?", !!token);
+    console.log("检查登录: userInfo存在?", !!userInfoStr);
+    if (token && userInfoStr) {
+      try {
+        const userInfo = UTS.JSON.parse(userInfoStr);
+        this.isLoggedIn = true;
+        this.userInfo = userInfo;
+        console.log("用户已登录，身份信息:", userInfo);
+        console.log("用户角色:", userInfo.role, "类型:", typeof userInfo.role);
+        this.checkRoleAndLogin();
+        this.loadData();
+      } catch (e) {
+        console.error("解析用户信息出错:", e);
+        this.resetUserState();
       }
     } else {
-      this.isLoggedIn = false;
-      this.userInfo = new UTSJSONObject({
-        name: "游客",
-        role: "user"
-      });
+      console.log("用户未登录或登录信息不完整，进入游客模式");
+      this.resetUserState();
     }
   },
   methods: {
-    // 检查登录状态，如未登录则跳转
-    checkLogin() {
+    checkRoleAndLogin() {
+      console.log("检查用户角色:", this.userInfo.role, typeof this.userInfo.role);
+      const isAdmin = this.userInfo.role === "admin" || this.userInfo.role === 3;
+      const isRater = this.userInfo.role === "rater" || this.userInfo.role === 2;
+      this.userInfo.role === "user" || this.userInfo.role === 1;
+      if (isAdmin) {
+        console.log("当前用户是管理员");
+        this.isAdmin = true;
+        this.isRater = false;
+      } else if (isRater) {
+        console.log("当前用户是评分员");
+        this.isAdmin = false;
+        this.isRater = true;
+      } else {
+        console.log("当前用户是普通用户");
+        this.isAdmin = false;
+        this.isRater = false;
+      }
+    },
+    navigateTo(url = null) {
       if (!this.isLoggedIn) {
         common_vendor.index.navigateTo({
           url: "/pages/login/login"
         });
         return false;
       }
-      return true;
-    },
-    navigateTo(url = null) {
-      if (!this.checkLogin())
-        return null;
       common_vendor.index.navigateTo({ url });
     },
     goToRating(tableId = null) {
-      if (!this.checkLogin())
-        return null;
+      if (!this.isLoggedIn) {
+        common_vendor.index.navigateTo({
+          url: "/pages/login/login"
+        });
+        return false;
+      }
       common_vendor.index.navigateTo({
         url: `/pages/rater/rating/rating?tableId=${tableId}`
       });
@@ -80,7 +104,6 @@ const _sfc_main = common_vendor.defineComponent({
       });
       return typeMap[type] || "未知类型";
     },
-    // 加载管理员统计数据
     loadAdminStats() {
       common_vendor.tr.callFunction({
         name: "ratingTable",
@@ -136,7 +159,6 @@ const _sfc_main = common_vendor.defineComponent({
         }
       });
     },
-    // 加载评分员数据
     loadRaterData() {
       common_vendor.tr.callFunction({
         name: "ratingTable",
@@ -184,6 +206,20 @@ const _sfc_main = common_vendor.defineComponent({
           });
         }
       });
+    },
+    resetUserState() {
+      this.isLoggedIn = false;
+      this.userInfo = new UTSJSONObject({
+        name: "游客",
+        role: "user"
+      });
+    },
+    loadData() {
+      if (this.isAdmin) {
+        this.loadAdminStats();
+      } else if (this.isRater) {
+        this.loadRaterData();
+      }
     }
   }
 });
@@ -202,26 +238,22 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
     j: common_vendor.o(($event) => $options.navigateTo("/pages/admin/users/users")),
     k: common_vendor.t($data.stats.ratingCompletionRate || "0%"),
     l: common_vendor.o(($event) => $options.navigateTo("/pages/admin/stats/stats")),
-    m: common_assets._imports_0,
-    n: common_vendor.o(($event) => $options.navigateTo("/pages/admin/tables/tables")),
-    o: common_assets._imports_1,
-    p: common_vendor.o(($event) => $options.navigateTo("/pages/admin/subjects/subjects")),
-    q: common_assets._imports_2,
-    r: common_vendor.o(($event) => $options.navigateTo("/pages/admin/users/users")),
-    s: common_assets._imports_3,
-    t: common_vendor.o(($event) => $options.navigateTo("/pages/admin/stats/stats"))
+    m: common_vendor.o(($event) => $options.navigateTo("/pages/admin/tables/tables")),
+    n: common_vendor.o(($event) => $options.navigateTo("/pages/admin/subjects/subjects")),
+    o: common_vendor.o(($event) => $options.navigateTo("/pages/admin/users/users")),
+    p: common_vendor.o(($event) => $options.navigateTo("/pages/admin/stats/stats"))
   } : {}, {
-    v: $data.userInfo.role === "rater"
+    q: $data.userInfo.role === "rater"
   }, $data.userInfo.role === "rater" ? common_vendor.e({
-    w: common_vendor.t($data.raterStats.tableCount || 0),
+    r: common_vendor.t($data.raterStats.tableCount || 0),
+    s: common_vendor.o(($event) => $options.navigateTo("/pages/rater/tables/tables")),
+    t: common_vendor.t($data.raterStats.ratedCount || 0),
+    v: common_vendor.o(($event) => $options.navigateTo("/pages/rater/history/history")),
+    w: common_vendor.t($data.raterStats.pendingCount || 0),
     x: common_vendor.o(($event) => $options.navigateTo("/pages/rater/tables/tables")),
-    y: common_vendor.t($data.raterStats.ratedCount || 0),
-    z: common_vendor.o(($event) => $options.navigateTo("/pages/rater/history/history")),
-    A: common_vendor.t($data.raterStats.pendingCount || 0),
-    B: common_vendor.o(($event) => $options.navigateTo("/pages/rater/tables/tables")),
-    C: $data.tables.length === 0
+    y: $data.tables.length === 0
   }, $data.tables.length === 0 ? {} : {}, {
-    D: common_vendor.f($data.tables, (table, index, i0) => {
+    z: common_vendor.f($data.tables, (table, index, i0) => {
       return {
         a: common_vendor.t(table.name),
         b: common_vendor.t($options.getTableTypeName(table.type)),
@@ -233,15 +265,14 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
       };
     })
   }) : {}, {
-    E: $data.userInfo.role === "user"
+    A: $data.userInfo.role === "user"
   }, $data.userInfo.role === "user" ? {
-    F: common_vendor.t($data.userInfo.username || ""),
-    G: common_vendor.t($data.userInfo.name || ""),
-    H: common_vendor.t($options.roleText)
+    B: common_vendor.t($data.userInfo.username || ""),
+    C: common_vendor.t($data.userInfo.name || ""),
+    D: common_vendor.t($options.roleText)
   } : {}, {
-    I: common_vendor.sei(common_vendor.gei(_ctx, ""), "view")
+    E: common_vendor.sei(common_vendor.gei(_ctx, ""), "view")
   });
 }
 const MiniProgramPage = /* @__PURE__ */ common_vendor._export_sfc(_sfc_main, [["render", _sfc_render]]);
 wx.createPage(MiniProgramPage);
-//# sourceMappingURL=../../../.sourcemap/mp-weixin/pages/index/index.js.map

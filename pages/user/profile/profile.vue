@@ -1,8 +1,8 @@
 <template>
-	<view class="container">
+	<view class="profile-container">
 		<view class="profile-header">
 			<view class="avatar-box">
-				<image class="avatar" :src="userInfo.avatar || '/static/images/default-avatar.png'" mode="aspectFill"></image>
+				<image class="avatar" :src="userInfo.avatar || '../../../static/images/default-avatar.png'" mode="aspectFill"></image>
 			</view>
 			<view class="user-info">
 				<text class="user-name">{{userInfo.name || '游客'}}</text>
@@ -16,9 +16,9 @@
 		<view class="login-prompt" v-if="!isLoggedIn">
 			<view class="profile-card">
 				<view class="guest-message">
-					<image class="guest-icon" src="/static/images/user.png" mode="aspectFit"></image>
+					<image class="guest-icon" src="../../../static/images/user.png" mode="aspectFit"></image>
 					<text class="guest-text">您当前为游客模式，请登录以使用更多功能</text>
-					<button class="login-btn" @click="goToLogin">去登录</button>
+					<button class="profile-login-btn" @click="goToLogin">去登录</button>
 				</view>
 			</view>
 		</view>
@@ -30,22 +30,36 @@
 				
 				<view class="form-group">
 					<view class="form-item">
-						<text class="item-label">用户名</text>
-						<text class="item-value">{{userInfo.username || ''}}</text>
-					</view>
-					<view class="form-item">
-						<text class="item-label">姓名</text>
-						<view class="item-input">
-							<input type="text" v-model="userInfo.name" placeholder="请输入姓名" />
+						<view class="item-row">
+							<text class="item-label">账号</text>
+							<text class="item-value">{{userInfo.username || ''}}</text>
 						</view>
 					</view>
 					<view class="form-item">
-						<text class="item-label">角色</text>
-						<text class="item-value">{{getRoleName(userInfo.role)}}</text>
+						<view class="item-row">
+							<text class="item-label">姓名</text>
+							<view class="item-input">
+								<input type="text" v-model="userInfo.name" placeholder="请输入姓名" />
+							</view>
+						</view>
+					</view>
+					<view class="form-item">
+						<view class="item-row">
+							<text class="item-label">角色</text>
+							<text class="item-value">{{getRoleName(userInfo.role)}}</text>
+						</view>
+					</view>
+					<view class="form-item">
+						<view class="item-row">
+							<text class="item-label">工作单位</text>
+							<view class="item-input">
+								<input type="text" v-model="userInfo.workUnit" placeholder="请输入工作单位" />
+							</view>
+						</view>
 					</view>
 				</view>
 				
-				<button class="save-btn" @click="saveUserInfo">保存信息</button>
+				<button class="profile-save-btn" @click="saveUserInfo">保存信息</button>
 			</view>
 			
 			<view class="profile-card">
@@ -53,26 +67,32 @@
 				
 				<view class="form-group">
 					<view class="form-item">
-						<text class="item-label">原密码</text>
-						<view class="item-input">
-							<input type="password" v-model="passwordForm.oldPassword" placeholder="请输入原密码" />
+						<view class="item-row">
+							<text class="item-label">原密码</text>
+							<view class="item-input">
+								<input type="password" v-model="passwordForm.oldPassword" placeholder="请输入原密码" />
+							</view>
 						</view>
 					</view>
 					<view class="form-item">
-						<text class="item-label">新密码</text>
-						<view class="item-input">
-							<input type="password" v-model="passwordForm.newPassword" placeholder="请输入新密码" />
+						<view class="item-row">
+							<text class="item-label">新密码</text>
+							<view class="item-input">
+								<input type="password" v-model="passwordForm.newPassword" placeholder="请输入新密码" />
+							</view>
 						</view>
 					</view>
 					<view class="form-item">
-						<text class="item-label">确认密码</text>
-						<view class="item-input">
-							<input type="password" v-model="passwordForm.confirmPassword" placeholder="请再次输入新密码" />
+						<view class="item-row">
+							<text class="item-label">确认密码</text>
+							<view class="item-input">
+								<input type="password" v-model="passwordForm.confirmPassword" placeholder="请再次输入新密码" />
+							</view>
 						</view>
 					</view>
 				</view>
 				
-				<button class="save-btn pwd-btn" @click="changePassword">修改密码</button>
+				<button class="profile-save-btn pwd-btn" @click="changePassword">修改密码</button>
 			</view>
 			
 			<view class="profile-card">
@@ -82,11 +102,6 @@
 					<view class="action-item" @click="clearCache">
 						<text class="action-icon">🧹</text>
 						<text class="action-text">清除缓存</text>
-						<text class="action-arrow">❯</text>
-					</view>
-					<view class="action-item" @click="aboutUs">
-						<text class="action-icon">ℹ️</text>
-						<text class="action-text">关于我们</text>
 						<text class="action-arrow">❯</text>
 					</view>
 					<view class="action-item logout" @click="confirmLogout">
@@ -102,28 +117,6 @@
 		<view class="version-info">
 			<text>v1.0.0</text>
 		</view>
-		
-		<!-- 退出登录确认弹窗 -->
-		<uni-popup ref="logoutPopup" type="dialog">
-			<uni-popup-dialog type="warn" title="确认退出" content="确定要退出登录吗？" :before-close="true" @confirm="logout" @close="closeLogoutPopup"></uni-popup-dialog>
-		</uni-popup>
-		
-		<!-- 关于我们弹窗 -->
-		<uni-popup ref="aboutPopup" type="center">
-			<view class="about-popup">
-				<view class="about-header">
-					<text class="about-title">关于我们</text>
-					<view class="popup-close" @click="closeAboutPopup">✕</view>
-				</view>
-				<view class="about-content">
-					<image class="about-logo" src="/static/images/logo.png" mode="aspectFit"></image>
-					<text class="about-name">干部考核评分系统</text>
-					<text class="about-version">v1.0.0</text>
-					<text class="about-desc">本系统用于干部考核评分，提供评分表管理、考核对象管理和评分记录管理等功能。</text>
-					<text class="about-copyright">Copyright © 2023 All Rights Reserved</text>
-				</view>
-			</view>
-		</uni-popup>
 	</view>
 </template>
 
@@ -147,6 +140,7 @@
 			}
 		},
 		onShow() {
+			console.log('=== 页面显示 - 开始检查登录状态 ===');
 			this.checkLoginStatus();
 		},
 		methods: {
@@ -155,9 +149,14 @@
 				const token = uni.getStorageSync('token');
 				const userInfoStr = uni.getStorageSync('userInfo');
 				
+				console.log('检查登录状态: token存在?', !!token);
+				console.log('检查登录状态: userInfo存在?', !!userInfoStr);
+				
 				if (token && userInfoStr) {
 					this.isLoggedIn = true;
 					this.userInfo = JSON.parse(userInfoStr);
+					console.log('用户已登录，从本地存储获取的用户信息:', this.userInfo);
+					console.log('用户角色:', this.userInfo.role, '(' + this.getRoleName(this.userInfo.role) + ')');
 					this.loadUserInfo();
 				} else {
 					this.isLoggedIn = false;
@@ -165,11 +164,13 @@
 						name: '游客',
 						role: 1
 					};
+					console.log('用户未登录，设置为游客模式');
 				}
 			},
 			
 			// 前往登录页
 			goToLogin() {
+				console.log('跳转到登录页面');
 				uni.navigateTo({
 					url: '/pages/login/login'
 				});
@@ -181,32 +182,63 @@
 				const userInfoStr = uni.getStorageSync('userInfo');
 				if (userInfoStr) {
 					this.userInfo = JSON.parse(userInfoStr);
+					console.log('从本地存储加载用户信息:', this.userInfo);
 				}
 				
-				// 从服务器获取最新的用户信息
+				console.log('开始从服务器获取最新用户信息');
+				// 从服务器获取最新的用户信息，需要传递用户名
 				uniCloud.callFunction({
 					name: 'user',
 					data: {
 						action: 'getUserInfo',
-						data: {}
+						data: {
+							username: this.userInfo.username // 传递用户名给云函数
+						}
 					}
 				}).then(res => {
+					console.log('服务器返回用户信息:', res.result);
 					if (res.result.code === 0) {
 						this.userInfo = res.result.data;
+						console.log('更新后的用户信息:', this.userInfo);
+						console.log('用户角色:', this.userInfo.role, '(' + this.getRoleName(this.userInfo.role) + ')');
 						// 更新本地存储
 						uni.setStorageSync('userInfo', JSON.stringify(this.userInfo));
+					} else {
+						console.error('获取用户信息失败:', res.result.msg);
 					}
+				}).catch(err => {
+					console.error('调用云函数失败:', err);
 				});
 			},
 			
 			// 获取角色名称
 			getRoleName(role) {
-				const roleMap = {
+				// 数字角色映射
+				const numericRoleMap = {
 					1: '普通用户',
 					2: '评分员',
 					3: '管理员'
 				};
-				return roleMap[role] || '游客';
+				
+				// 字符串角色映射
+				const stringRoleMap = {
+					'user': '普通用户',
+					'rater': '评分员',
+					'admin': '管理员'
+				};
+				
+				// 先检查是否是数字角色
+				if (numericRoleMap[role]) {
+					return numericRoleMap[role];
+				}
+				
+				// 再检查是否是字符串角色
+				if (stringRoleMap[role]) {
+					return stringRoleMap[role];
+				}
+				
+				// 如果都不是，返回游客
+				return '游客';
 			},
 			
 			// 保存用户信息
@@ -223,16 +255,25 @@
 					title: '保存中...'
 				});
 				
+				console.log('准备保存用户信息:', {
+					name: this.userInfo.name,
+					workUnit: this.userInfo.workUnit,
+					username: this.userInfo.username
+				});
+				
 				uniCloud.callFunction({
 					name: 'user',
 					data: {
 						action: 'updateUserInfo',
 						data: {
-							name: this.userInfo.name
+							name: this.userInfo.name,
+							workUnit: this.userInfo.workUnit,
+							username: this.userInfo.username // 传递用户名
 						}
 					}
 				}).then(res => {
 					uni.hideLoading();
+					console.log('保存用户信息结果:', res.result);
 					
 					if (res.result.code === 0) {
 						uni.showToast({
@@ -250,7 +291,7 @@
 					}
 				}).catch(err => {
 					uni.hideLoading();
-					console.error(err);
+					console.error('保存用户信息出错:', err);
 					uni.showToast({
 						title: '保存失败，请检查网络',
 						icon: 'none'
@@ -297,17 +338,25 @@
 					title: '修改中...'
 				});
 				
+				console.log('准备修改密码:', {
+					oldPassword: this.passwordForm.oldPassword,
+					newPassword: this.passwordForm.newPassword,
+					username: this.userInfo.username
+				});
+				
 				uniCloud.callFunction({
 					name: 'user',
 					data: {
 						action: 'changePassword',
 						data: {
 							oldPassword: this.passwordForm.oldPassword,
-							newPassword: this.passwordForm.newPassword
+							newPassword: this.passwordForm.newPassword,
+							username: this.userInfo.username // 传递用户名
 						}
 					}
 				}).then(res => {
 					uni.hideLoading();
+					console.log('修改密码结果:', res.result);
 					
 					if (res.result.code === 0) {
 						uni.showToast({
@@ -329,7 +378,7 @@
 					}
 				}).catch(err => {
 					uni.hideLoading();
-					console.error(err);
+					console.error('修改密码出错:', err);
 					uni.showToast({
 						title: '密码修改失败，请检查网络',
 						icon: 'none'
@@ -374,28 +423,22 @@
 				}
 			},
 			
-			// 关于我们
-			aboutUs() {
-				this.$refs.aboutPopup.open();
-			},
-			
-			// 关闭关于我们弹窗
-			closeAboutPopup() {
-				this.$refs.aboutPopup.close();
-			},
-			
 			// 确认退出登录
 			confirmLogout() {
-				this.$refs.logoutPopup.open();
-			},
-			
-			// 关闭退出登录确认弹窗
-			closeLogoutPopup() {
-				this.$refs.logoutPopup.close();
+				uni.showModal({
+					title: '确认退出',
+					content: '确定要退出登录吗？',
+					success: (res) => {
+						if (res.confirm) {
+							this.logout();
+						}
+					}
+				});
 			},
 			
 			// 退出登录
 			logout() {
+				console.log('执行退出登录操作');
 				// 清除登录信息
 				uni.removeStorageSync('token');
 				uni.removeStorageSync('userInfo');
@@ -406,6 +449,7 @@
 					name: '游客',
 					role: 1
 				};
+				console.log('退出登录完成，用户状态已重置为游客');
 				
 				uni.showToast({
 					title: '已退出登录',
@@ -416,9 +460,13 @@
 	}
 </script>
 
-<style>
-	.container {
+<style scoped>
+	.profile-container {
 		padding: 30rpx;
+		background-color: #f8f8f8;
+		min-height: 100vh;
+		box-sizing: border-box;
+		width: 100%;
 	}
 	
 	/* 头像和用户信息 */
@@ -426,6 +474,7 @@
 		display: flex;
 		align-items: center;
 		margin-bottom: 40rpx;
+		width: 100%;
 	}
 	
 	.avatar-box {
@@ -435,6 +484,8 @@
 		overflow: hidden;
 		background-color: #f5f5f5;
 		margin-right: 30rpx;
+		box-shadow: 0 4rpx 8rpx rgba(0, 0, 0, 0.1);
+		flex-shrink: 0;
 	}
 	
 	.avatar {
@@ -451,6 +502,7 @@
 		font-weight: bold;
 		display: block;
 		margin-bottom: 16rpx;
+		text-align: left;
 	}
 	
 	.user-role {
@@ -458,11 +510,29 @@
 		font-size: 24rpx;
 		padding: 4rpx 16rpx;
 		border-radius: 20rpx;
+		text-align: left;
+	}
+	
+	/* 角色样式 */
+	.role-user, .role-1 {
+		background-color: #f5f5f5;
+		color: #666;
+	}
+	
+	.role-rater, .role-2 {
+		background-color: #e6f3fc;
+		color: #1989fa;
+	}
+	
+	.role-admin, .role-3 {
+		background-color: #e6f7ed;
+		color: #07c160;
 	}
 	
 	/* 未登录提示 */
 	.login-prompt {
 		margin-bottom: 30rpx;
+		width: 100%;
 	}
 	
 	.guest-message {
@@ -485,27 +555,12 @@
 		margin-bottom: 30rpx;
 	}
 	
-	.login-btn {
+	.profile-login-btn {
 		background-color: #07c160;
 		color: #fff;
 		font-size: 30rpx;
 		width: 60%;
 		border-radius: 40rpx;
-	}
-	
-	.role-1 {
-		background-color: #f5f5f5;
-		color: #666;
-	}
-	
-	.role-2 {
-		background-color: #e6f3fc;
-		color: #1989fa;
-	}
-	
-	.role-3 {
-		background-color: #e6f7ed;
-		color: #07c160;
 	}
 	
 	/* 信息卡片 */
@@ -515,6 +570,8 @@
 		padding: 30rpx;
 		margin-bottom: 30rpx;
 		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+		width: 100%;
+		box-sizing: border-box;
 	}
 	
 	.section-title {
@@ -523,6 +580,7 @@
 		margin-bottom: 30rpx;
 		position: relative;
 		padding-left: 20rpx;
+		text-align: left;
 	}
 	
 	.section-title::before {
@@ -539,46 +597,71 @@
 	/* 表单样式 */
 	.form-group {
 		margin-bottom: 30rpx;
+		width: 100%;
 	}
 	
 	.form-item {
-		display: flex;
-		align-items: center;
+		position: relative;
 		padding: 20rpx 0;
 		border-bottom: 1rpx solid #f5f5f5;
+		width: 100%;
+		box-sizing: border-box;
+		display: block;
+		clear: both;
+		overflow: hidden;
 	}
 	
-	.form-item:last-child {
-		border-bottom: none;
+	.item-row {
+		display: flex;
+		align-items: flex-start;
+		width: 100%;
+		justify-content: flex-start;
+		position: relative;
 	}
 	
 	.item-label {
 		width: 140rpx;
 		font-size: 28rpx;
 		color: #666;
+		text-align: left !important;
+		flex-shrink: 0;
 	}
 	
 	.item-value {
 		flex: 1;
 		font-size: 28rpx;
 		color: #333;
+		text-align: left !important;
+		padding-left: 0;
 	}
 	
 	.item-input {
 		flex: 1;
+		text-align: left !important;
 	}
 	
 	.item-input input {
 		height: 60rpx;
 		font-size: 28rpx;
+		width: 100%;
+		text-align: left !important;
+		padding-left: 0;
 	}
 	
-	.save-btn {
+	/* 强制文本左对齐 */
+	.form-item text,
+	.form-item input,
+	.form-item view {
+		text-align: left !important;
+	}
+	
+	.profile-save-btn {
 		background-color: #07c160;
 		color: #fff;
 		font-size: 30rpx;
 		border-radius: 8rpx;
 		margin-top: 20rpx;
+		width: 100%;
 	}
 	
 	.pwd-btn {
@@ -588,6 +671,7 @@
 	/* 操作列表 */
 	.action-list {
 		margin-bottom: 20rpx;
+		width: 100%;
 	}
 	
 	.action-item {
@@ -595,6 +679,8 @@
 		align-items: center;
 		padding: 30rpx 0;
 		border-bottom: 1rpx solid #f5f5f5;
+		width: 100%;
+		box-sizing: border-box;
 	}
 	
 	.action-item:last-child {
@@ -610,6 +696,7 @@
 		flex: 1;
 		font-size: 30rpx;
 		color: #333;
+		text-align: left;
 	}
 	
 	.action-arrow {
@@ -621,82 +708,43 @@
 		color: #fa5151;
 	}
 	
-	/* 版本信息 */
+	/* 版本信息居中 */
 	.version-info {
 		text-align: center;
 		padding: 30rpx 0;
 		color: #999;
 		font-size: 24rpx;
+		width: 100%;
 	}
 	
-	/* 关于我们弹窗 */
-	.about-popup {
-		background-color: #fff;
-		border-radius: 16rpx;
-		width: 600rpx;
-		overflow: hidden;
-	}
-	
-	.about-header {
-		padding: 30rpx;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		border-bottom: 1rpx solid #f5f5f5;
-	}
-	
-	.about-title {
-		font-size: 32rpx;
-		font-weight: bold;
-	}
-	
-	.popup-close {
-		font-size: 24rpx;
-		color: #999;
-		width: 40rpx;
-		height: 40rpx;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: 50%;
-		background-color: #f5f5f5;
-	}
-	
-	.about-content {
-		padding: 40rpx 30rpx;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-	}
-	
-	.about-logo {
-		width: 150rpx;
-		height: 150rpx;
-		margin-bottom: 30rpx;
-	}
-	
-	.about-name {
-		font-size: 34rpx;
-		font-weight: bold;
-		margin-bottom: 10rpx;
-	}
-	
-	.about-version {
-		font-size: 24rpx;
-		color: #999;
-		margin-bottom: 30rpx;
-	}
-	
-	.about-desc {
-		font-size: 28rpx;
-		color: #666;
+	.version-info text {
 		text-align: center;
-		line-height: 1.5;
-		margin-bottom: 40rpx;
 	}
 	
-	.about-copyright {
-		font-size: 24rpx;
-		color: #999;
+	/* 响应式布局 */
+	@media screen and (max-width: 375px) {
+		.avatar-box {
+			width: 120rpx;
+			height: 120rpx;
+		}
+		
+		.user-name {
+			font-size: 32rpx;
+		}
+		
+		.profile-card {
+			padding: 20rpx;
+		}
+		
+		.form-item {
+			padding: 15rpx 0;
+		}
+	}
+	
+	/* 其他文本元素左对齐 */
+	.profile-container text,
+	.profile-container input,
+	.profile-container view {
+		text-align: left;
 	}
 </style> 

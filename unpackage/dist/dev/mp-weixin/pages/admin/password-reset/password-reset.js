@@ -64,7 +64,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         }
       }).catch((err = null) => {
         this.isLoading = false;
-        common_vendor.index.__f__("error", "at pages/admin/password-reset/password-reset.vue:180", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "加载失败，请检查网络",
           icon: "none"
@@ -125,7 +125,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/password-reset/password-reset.vue:257", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "处理失败，请检查网络",
           icon: "none"
@@ -176,7 +176,7 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
         }
       }).catch((err = null) => {
         common_vendor.index.hideLoading();
-        common_vendor.index.__f__("error", "at pages/admin/password-reset/password-reset.vue:319", err);
+        console.error(err);
         common_vendor.index.showToast({
           title: "处理失败，请检查网络",
           icon: "none"
@@ -214,9 +214,14 @@ const _sfc_main = common_vendor.defineComponent(new UTSJSONObject({
   })
 }));
 if (!Array) {
-  const _component_uni_popup_dialog = common_vendor.resolveComponent("uni-popup-dialog");
-  const _component_uni_popup = common_vendor.resolveComponent("uni-popup");
-  (_component_uni_popup_dialog + _component_uni_popup)();
+  const _easycom_uni_popup_dialog2 = common_vendor.resolveComponent("uni-popup-dialog");
+  const _easycom_uni_popup2 = common_vendor.resolveComponent("uni-popup");
+  (_easycom_uni_popup_dialog2 + _easycom_uni_popup2)();
+}
+const _easycom_uni_popup_dialog = () => "../../../uni_modules/uni-popup/components/uni-popup-dialog/uni-popup-dialog.js";
+const _easycom_uni_popup = () => "../../../uni_modules/uni-popup/components/uni-popup/uni-popup.js";
+if (!Math) {
+  (_easycom_uni_popup_dialog + _easycom_uni_popup)();
 }
 function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
   return common_vendor.e({
@@ -291,4 +296,3 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
 }
 const MiniProgramPage = /* @__PURE__ */ common_vendor._export_sfc(_sfc_main, [["render", _sfc_render]]);
 wx.createPage(MiniProgramPage);
-//# sourceMappingURL=../../../../.sourcemap/mp-weixin/pages/admin/password-reset/password-reset.js.map
