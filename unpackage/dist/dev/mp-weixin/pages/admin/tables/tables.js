@@ -441,13 +441,11 @@ function _sfc_render(_ctx, _cache, $props, $setup, $data, $options) {
         a: common_vendor.t(table.name),
         b: common_vendor.t($options.getTableTypeName(table.type)),
         c: common_vendor.o(($event) => $options.editTable(table), index),
-        d: common_vendor.o(($event) => $options.showChangeRaterModal(table), index),
-        e: common_vendor.o(($event) => $options.confirmDelete(table._id), index),
-        f: common_vendor.t(table.category || "无"),
-        g: common_vendor.t(table.rater),
-        h: common_vendor.t(table.items ? table.items.length : 0),
-        i: index,
-        j: common_vendor.o(($event) => $options.navigateToDetail(table._id), index)
+        d: common_vendor.t(table.category || "无"),
+        e: common_vendor.t(table.rater),
+        f: common_vendor.t(table.items ? table.items.length : 0),
+        g: index,
+        h: common_vendor.o(($event) => $options.navigateToDetail(table._id), index)
       };
     }),
     i: $data.tables.length > 0 && $data.hasMoreData
