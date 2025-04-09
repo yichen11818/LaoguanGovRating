@@ -123,23 +123,90 @@
 			}
 		},
 		onShow() {
+			console.log('======== 页面显示(onShow)事件触发 ========');
+			// 检查token和用户名状态
+			const token = uni.getStorageSync('uni_id_token');
+			const username = uni.getStorageSync('username');
+			console.log('页面显示时 token状态:', token ? '存在' : '不存在', '用户名状态:', username ? `存在(${username})` : '不存在');
+			
 			// 每次页面显示时重新加载数据
+			console.log('开始重新加载数据...');
 			this.reloadData();
+			console.log('======== 页面显示处理完成 ========');
 		},
 		onLoad() {
+			console.log('======== 页面加载开始 ========');
+			// 检查用户登录状态
+			const token = uni.getStorageSync('uni_id_token');
+			console.log('当前token状态:', token ? '已获取token' : '没有token', '长度:', token ? token.length : 0);
+			
+			if (!token) {
+				console.warn('【跳转原因1】用户未登录，无token，准备跳转到登录页面');
+				uni.showToast({
+					title: '请先登录',
+					icon: 'none',
+					duration: 2000
+				});
+				
+				// 延迟跳转，让用户看到提示
+				setTimeout(() => {
+					console.log('执行跳转到登录页...');
+					uni.navigateTo({
+						url: '/pages/login/login',
+						success: () => {
+							console.log('跳转到登录页成功');
+						},
+						fail: (err) => {
+							console.error('跳转到登录页失败:', err);
+						}
+					});
+				}, 1500);
+				return;
+			}
+			
 			// 检查并确保有用户名
+			console.log('开始获取用户名...');
 			this.username = this.ensureUsername();
-			console.log('当前用户名:', this.username);
+			console.log('获取用户名结果:', this.username ? `成功(${this.username})` : '失败');
+			
+			if (!this.username) {
+				console.warn('【跳转原因2】无法获取用户名，准备跳转到登录页面');
+				uni.showToast({
+					title: '用户信息异常，请重新登录',
+					icon: 'none',
+					duration: 2000
+				});
+				
+				// 延迟跳转，让用户看到提示
+				setTimeout(() => {
+					console.log('执行跳转到登录页...');
+					uni.navigateTo({
+						url: '/pages/login/login',
+						success: () => {
+							console.log('跳转到登录页成功');
+						},
+						fail: (err) => {
+							console.error('跳转到登录页失败:', err);
+						}
+					});
+				}, 1500);
+				return;
+			}
 			
 			// 初始化默认数据，防止空值引用
 			this.initDefaultData();
+			console.log('初始化默认数据完成');
 			
 			// 初始加载
+			console.log('开始加载数据...');
 			this.reloadData();
+			console.log('======== 页面加载完成 ========');
 		},
 		onPullDownRefresh() {
+			console.log('======== 下拉刷新(onPullDownRefresh)事件触发 ========');
 			// 下拉刷新
 			this.reloadData(() => {
+				console.log('下拉刷新数据加载完成，停止下拉刷新动画');
 				uni.stopPullDownRefresh();
 			});
 		},
@@ -164,48 +231,103 @@
 			
 			// 确保有用户名
 			ensureUsername() {
+				console.log('==== ensureUsername开始执行 ====');
+				// 首先从本地存储中获取用户名
 				let username = uni.getStorageSync('username');
+				console.log('从本地存储获取用户名:', username ? `成功(${username})` : '失败');
+				
+				// 如果没有用户名，尝试从用户信息中获取
 				if (!username) {
-					// 尝试从用户信息中获取
+					console.log('本地存储中没有用户名，尝试从userInfo获取');
 					const userInfoStr = uni.getStorageSync('userInfo');
+					console.log('userInfo存储状态:', userInfoStr ? '存在' : '不存在', '内容:', userInfoStr);
+					
 					if (userInfoStr) {
 						try {
 							const userInfo = JSON.parse(userInfoStr);
+							console.log('解析userInfo结果:', userInfo ? '成功' : '失败', '内容:', JSON.stringify(userInfo));
+							
 							if (userInfo && userInfo.username) {
 								username = userInfo.username;
+								// 保存用户名到本地存储
 								uni.setStorageSync('username', username);
 								console.log('从userInfo中获取并保存用户名:', username);
+							} else {
+								console.warn('userInfo中没有username字段');
 							}
 						} catch (e) {
 							console.error('解析userInfo失败:', e);
 						}
+					} else {
+						console.warn('没有找到userInfo');
 					}
 				}
 				
-				// 如果仍然无法获取用户名，可以考虑跳转到登录页面
+				// 如果仍然没有用户名，尝试从token中获取
 				if (!username) {
-					console.warn('无法获取用户名，可能需要重新登录');
-					// 跳转到登录页或其他处理...
+					console.log('尝试从token中获取用户信息');
+					const token = uni.getStorageSync('uni_id_token');
+					console.log('token状态:', token ? '存在' : '不存在', '长度:', token ? token.length : 0);
+					
+					if (token) {
+						try {
+							// 在实际应用中，这里可能需要调用一个云函数来解析token
+							// 这里简化处理，只检查token是否存在
+							console.log('发现token，将尝试在云函数中解析');
+							
+							// 调用云函数获取当前用户信息
+							try {
+								console.log('尝试通过云函数获取用户信息');
+								// 注意：这是同步调用，实际上应该是异步调用并等待结果
+								// 为了调试，我们这里只记录日志而不实际调用
+							} catch (e) {
+								console.error('调用云函数获取用户信息失败:', e);
+							}
+						} catch (e) {
+							console.error('解析token失败:', e);
+						}
+					} else {
+						console.warn('没有找到token');
+					}
 				}
 				
+				// 记录获取到的用户名
+				if (username) {
+					console.log('成功获取用户名:', username);
+				} else {
+					console.warn('无法获取用户名，可能需要重新登录');
+				}
+				
+				console.log('==== ensureUsername执行完成 ====');
 				return username || '';
 			},
 			
 			// 重新加载数据
 			reloadData(callback) {
+				console.log('==== reloadData开始执行 ====');
 				this.page = 1;
+				console.log('开始加载评分统计...');
 				this.loadStats();
+				console.log('开始加载评分表列表...');
 				this.loadTables(() => {
+					console.log('loadTables回调执行');
 					if (typeof callback === 'function') {
 						callback();
 					}
 				});
+				console.log('==== reloadData执行完成 ====');
 			},
 			
 			// 加载评分统计数据
 			loadStats() {
+				console.log('==== loadStats开始执行 ====');
 				// 确保有用户名
+				const prevUsername = this.username;
 				this.username = this.ensureUsername();
+				
+				if (prevUsername !== this.username) {
+					console.log('用户名已更新:', prevUsername, '->', this.username);
+				}
 				
 				// 如果没有获取到用户名，可以直接返回
 				if (!this.username) {
@@ -213,36 +335,75 @@
 					return;
 				}
 				
+				uni.showLoading({
+					title: '加载中...'
+				});
+				
+				// 获取当前登录用户的token
+				const token = uni.getStorageSync('uni_id_token') || '';
+				console.log('准备调用getRaterStats，token长度:', token.length);
+				
+				console.log('调用云函数rating.getRaterStats，参数:', {
+					username: this.username,
+					rater: this.username,
+					uniIdToken: token.substr(0, 10) + '...'
+				});
+				
 				uniCloud.callFunction({
 					name: 'rating',
 					data: {
 						action: 'getRaterStats',
 						data: {
-							rater: this.username || ''
+							username: this.username,
+							rater: this.username,
+							uniIdToken: token
 						}
 					}
 				}).then(res => {
-					if (res.result.code === 0) {
+					uni.hideLoading();
+					console.log('getRaterStats响应:', JSON.stringify(res));
+					
+					if (res.result && res.result.code === 0) {
 						this.stats = res.result.data || { total: 0, completed: 0, pending: 0 };
+						console.log('获取评分统计成功:', JSON.stringify(this.stats));
 					} else {
-						console.error('获取评分统计失败:', res.result.msg);
+						console.error('获取评分统计失败:', res.result ? res.result.msg : '未知错误');
 						// 确保stats有默认值
 						this.stats = { total: 0, completed: 0, pending: 0 };
+						uni.showToast({
+							title: res.result && res.result.msg ? res.result.msg : '获取评分统计失败',
+							icon: 'none'
+						});
 					}
 				}).catch(err => {
+					uni.hideLoading();
 					console.error('调用getRaterStats失败:', err);
 					// 确保stats有默认值
 					this.stats = { total: 0, completed: 0, pending: 0 };
+					uni.showToast({
+						title: '获取评分统计失败，请检查网络',
+						icon: 'none'
+					});
+				}).finally(() => {
+					console.log('==== loadStats执行完成 ====');
 				});
 			},
 			
 			// 加载评分表列表
 			loadTables(callback) {
+				console.log('==== loadTables开始执行 ====');
 				this.isLoading = true;
 				
 				const type = this.typeOptions[this.currentTypeIndex].type;
+				console.log('当前选择的类型索引:', this.currentTypeIndex, '类型值:', type);
+				
 				// 确保有用户名
+				const prevUsername = this.username;
 				this.username = this.ensureUsername();
+				
+				if (prevUsername !== this.username) {
+					console.log('用户名已更新:', prevUsername, '->', this.username);
+				}
 				
 				// 如果没有获取到用户名，可以直接返回
 				if (!this.username) {
@@ -258,6 +419,20 @@
 					title: '加载中...'
 				});
 				
+				// 获取当前登录用户的token
+				const token = uni.getStorageSync('uni_id_token') || '';
+				console.log('准备调用getRaterTables，token长度:', token.length);
+				
+				// 记录请求参数
+				console.log('调用云函数ratingTable.getRaterTables，参数:', {
+					type,
+					page: this.page,
+					pageSize: this.pageSize,
+					username: this.username,
+					rater: this.username,
+					uniIdToken: token.substr(0, 10) + '...'
+				});
+				
 				uniCloud.callFunction({
 					name: 'ratingTable',
 					data: {
@@ -266,15 +441,19 @@
 							type: type,
 							page: this.page,
 							pageSize: this.pageSize,
-							rater: this.username || ''
+							username: this.username,
+							rater: this.username,
+							uniIdToken: token
 						}
 					}
 				}).then(res => {
 					uni.hideLoading();
 					this.isLoading = false;
+					console.log('getRaterTables响应:', JSON.stringify(res));
 					
-					if (res.result.code === 0) {
+					if (res.result && res.result.code === 0) {
 						const data = res.result.data || { list: [], total: 0 };
+						console.log('获取评分表列表成功, 总数:', data.total, '当前页数据量:', data.list ? data.list.length : 0);
 						
 						if (this.page === 1) {
 							this.tables = data.list || [];
@@ -284,10 +463,11 @@
 						
 						this.total = data.total || 0;
 						this.hasMoreData = (this.tables && this.tables.length) < this.total;
+						console.log('当前表格数据总量:', this.tables.length, '是否有更多数据:', this.hasMoreData);
 					} else {
-						console.error('获取评分表列表失败:', res.result.msg);
+						console.error('获取评分表列表失败:', res.result ? res.result.msg : '未知错误', '详细信息:', JSON.stringify(res));
 						uni.showToast({
-							title: res.result.msg || '加载失败',
+							title: res.result && res.result.msg ? res.result.msg : '加载失败',
 							icon: 'none'
 						});
 					}
@@ -307,6 +487,8 @@
 					if (typeof callback === 'function') {
 						callback();
 					}
+				}).finally(() => {
+					console.log('==== loadTables执行完成 ====');
 				});
 			},
 			
@@ -373,10 +555,16 @@
 			
 			// 加载更多
 			loadMore() {
-				if (this.isLoading || !this.hasMoreData) return;
+				console.log('==== loadMore开始执行 ====');
+				if (this.isLoading || !this.hasMoreData) {
+					console.log('跳过加载更多:', this.isLoading ? '正在加载中' : '没有更多数据');
+					return;
+				}
 				
 				this.page++;
+				console.log('加载更多数据，当前页码:', this.page);
 				this.loadTables();
+				console.log('==== loadMore执行完成 ====');
 			}
 		}
 	}
