@@ -31,7 +31,7 @@
 						<text class="subject-position">职位：{{subject.position}}</text>
 					</view>
 					<view class="info-row">
-						<text class="subject-table">所属评分表：{{getTableName(subject.table_id)}}</text>
+						<text class="subject-table">所属评分表：{{getTableNames(subject.table_id)}}</text>
 					</view>
 				</view>
 				<view class="subject-actions">
@@ -68,12 +68,20 @@
 			</view>
 			<view class="form-item">
 				<text class="form-label">所属评分表</text>
-				<picker @change="handleFormTableChange" :value="formData.tableIndex" :range="tables" range-key="name">
-					<view class="form-picker">
-						<text>{{tables[formData.tableIndex].name}}</text>
-						<text class="picker-arrow">▼</text>
+				<view class="table-selector">
+					<view class="selected-tables">
+						<view class="selected-table" v-for="(table, index) in formData.selectedTables" :key="index">
+							<text>{{table.name}}</text>
+							<text class="remove-table" @click="removeSelectedTable(index)">×</text>
+						</view>
 					</view>
-				</picker>
+					<picker @change="handleFormTableChange" :value="formData.tableIndex" :range="tables" range-key="name">
+						<view class="form-picker">
+							<text>选择评分表</text>
+							<text class="picker-arrow">▼</text>
+						</view>
+					</picker>
+				</view>
 			</view>
 			<view class="popup-btns">
 				<button class="cancel-btn" size="mini" @click="hideAddSubjectPopup">取消</button>
@@ -99,12 +107,20 @@
 			</view>
 			<view class="form-item">
 				<text class="form-label">所属评分表</text>
-				<picker @change="handleEditTableChange" :value="editData.tableIndex" :range="tables" range-key="name">
-					<view class="form-picker">
-						<text>{{tables[editData.tableIndex].name}}</text>
-						<text class="picker-arrow">▼</text>
+				<view class="table-selector">
+					<view class="selected-tables">
+						<view class="selected-table" v-for="(table, index) in editData.selectedTables" :key="index">
+							<text>{{table.name}}</text>
+							<text class="remove-table" @click="removeEditTable(index)">×</text>
+						</view>
 					</view>
-				</picker>
+					<picker @change="handleEditTableChange" :value="editData.tableIndex" :range="tables" range-key="name">
+						<view class="form-picker">
+							<text>选择评分表</text>
+							<text class="picker-arrow">▼</text>
+						</view>
+					</picker>
+				</view>
 			</view>
 			<view class="popup-btns">
 				<button class="cancel-btn" size="mini" @click="hideEditSubjectPopup">取消</button>
@@ -132,7 +148,8 @@
 					name: '',
 					department: '',
 					position: '',
-					tableIndex: 0
+					tableIndex: 0,
+					selectedTables: []
 				},
 				
 				// 编辑表单数据
@@ -141,7 +158,8 @@
 					name: '',
 					department: '',
 					position: '',
-					tableIndex: 0
+					tableIndex: 0,
+					selectedTables: []
 				},
 				
 				// 弹窗显示状态
@@ -256,12 +274,19 @@
 				this.loadSubjects();
 			},
 			
-			// 获取评分表名称
-			getTableName(tableId) {
-				if (!tableId) return '未分配';
+			// 获取评分表名称列表
+			getTableNames(tableIds) {
+				// 确保tableIds是数组类型
+				if (!tableIds) return '未分配';
+				const ids = Array.isArray(tableIds) ? tableIds : [tableIds];
+				if (ids.length === 0) return '未分配';
 				
-				const table = this.tables.find(item => item._id === tableId);
-				return table ? table.name : '未知评分表';
+				const names = ids.map(id => {
+					const table = this.tables.find(item => item._id === id);
+					return table ? table.name : '未知评分表';
+				});
+				
+				return names.join('、');
 			},
 			
 			// 显示新增考核对象弹窗
@@ -271,7 +296,8 @@
 					name: '',
 					department: '',
 					position: '',
-					tableIndex: 0
+					tableIndex: 0,
+					selectedTables: []
 				};
 				
 				this.popupVisible.addSubject = true;
@@ -284,7 +310,18 @@
 			
 			// 处理表单评分表变化
 			handleFormTableChange(e) {
-				this.formData.tableIndex = e.detail.value;
+				const index = e.detail.value;
+				const table = this.tables[index];
+				
+				// 检查是否已经选择过该评分表
+				if (!this.formData.selectedTables.some(item => item._id === table._id)) {
+					this.formData.selectedTables.push(table);
+				}
+			},
+			
+			// 移除已选择的评分表
+			removeSelectedTable(index) {
+				this.formData.selectedTables.splice(index, 1);
 			},
 			
 			// 提交新增考核对象
@@ -297,9 +334,9 @@
 					return;
 				}
 				
-				if (this.formData.tableIndex === 0) {
+				if (this.formData.selectedTables.length === 0) {
 					uni.showToast({
-						title: '请选择所属评分表',
+						title: '请选择至少一个评分表',
 						icon: 'none'
 					});
 					return;
@@ -309,7 +346,7 @@
 					title: '提交中...'
 				});
 				
-				const tableId = this.tables[this.formData.tableIndex]._id;
+				const tableIds = this.formData.selectedTables.map(table => table._id);
 				
 				uniCloud.callFunction({
 					name: 'subject',
@@ -317,9 +354,9 @@
 						action: 'createSubject',
 						data: {
 							name: this.formData.name,
+							table_id: tableIds,
 							department: this.formData.department,
-							position: this.formData.position,
-							table_id: tableId
+							position: this.formData.position
 						}
 					}
 				}).then(res => {
@@ -354,21 +391,21 @@
 			editSubject(index) {
 				const subject = this.subjects[index];
 				
-				// 找到表格的索引
-				let tableIndex = 0;
-				for (let i = 0; i < this.tables.length; i++) {
-					if (this.tables[i]._id === subject.table_id) {
-						tableIndex = i;
-						break;
-					}
-				}
+				// 确保table_id是数组类型
+				const tableIds = Array.isArray(subject.table_id) ? subject.table_id : [subject.table_id];
+				
+				// 获取已选择的评分表
+				const selectedTables = tableIds.map(tableId => {
+					return this.tables.find(table => table._id === tableId);
+				}).filter(Boolean);
 				
 				this.editData = {
 					id: subject._id,
 					name: subject.name,
 					department: subject.department || '',
 					position: subject.position || '',
-					tableIndex: tableIndex
+					tableIndex: 0,
+					selectedTables: selectedTables
 				};
 				
 				this.popupVisible.editSubject = true;
@@ -381,7 +418,18 @@
 			
 			// 处理编辑评分表变化
 			handleEditTableChange(e) {
-				this.editData.tableIndex = e.detail.value;
+				const index = e.detail.value;
+				const table = this.tables[index];
+				
+				// 检查是否已经选择过该评分表
+				if (!this.editData.selectedTables.some(item => item._id === table._id)) {
+					this.editData.selectedTables.push(table);
+				}
+			},
+			
+			// 移除已选择的评分表
+			removeEditTable(index) {
+				this.editData.selectedTables.splice(index, 1);
 			},
 			
 			// 提交编辑考核对象
@@ -394,9 +442,9 @@
 					return;
 				}
 				
-				if (this.editData.tableIndex === 0) {
+				if (this.editData.selectedTables.length === 0) {
 					uni.showToast({
-						title: '请选择所属评分表',
+						title: '请选择至少一个评分表',
 						icon: 'none'
 					});
 					return;
@@ -406,7 +454,7 @@
 					title: '提交中...'
 				});
 				
-				const tableId = this.tables[this.editData.tableIndex]._id;
+				const tableIds = this.editData.selectedTables.map(table => table._id);
 				
 				uniCloud.callFunction({
 					name: 'subject',
@@ -416,9 +464,9 @@
 							subjectId: this.editData.id,
 							updateData: {
 								name: this.editData.name,
+								table_id: tableIds,
 								department: this.editData.department,
-								position: this.editData.position,
-								table_id: tableId
+								position: this.editData.position
 							}
 						}
 					}
@@ -512,28 +560,28 @@
 
 <style>
 	.container {
-		padding: 30rpx;
+		padding: 20rpx;
 	}
 	
 	.filter-bar {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 30rpx;
+		margin-bottom: 20rpx;
 	}
 	
 	.filter-item {
 		flex: 1;
+		margin-right: 20rpx;
 	}
 	
 	.picker-box {
-		background-color: #f8f8f8;
-		height: 70rpx;
-		border-radius: 8rpx;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0 20rpx;
+		padding: 10rpx 20rpx;
+		background-color: #f5f5f5;
+		border-radius: 8rpx;
 	}
 	
 	.picker-text {
@@ -547,11 +595,11 @@
 	}
 	
 	.action-btns {
-		margin-left: 20rpx;
+		display: flex;
 	}
 	
 	.add-btn {
-		background-color: #07c160;
+		background-color: #007AFF;
 		color: #fff;
 	}
 	
@@ -560,17 +608,17 @@
 	}
 	
 	.no-data {
-		padding: 60rpx 0;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
+		padding: 100rpx 0;
 	}
 	
 	.no-data-icon {
 		width: 200rpx;
 		height: 200rpx;
-		margin-bottom: 30rpx;
+		margin-bottom: 20rpx;
 	}
 	
 	.no-data-text {
@@ -580,9 +628,9 @@
 	
 	.subject-item {
 		background-color: #fff;
-		border-radius: 16rpx;
-		padding: 30rpx;
-		margin-bottom: 30rpx;
+		border-radius: 8rpx;
+		padding: 20rpx;
+		margin-bottom: 20rpx;
 		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
 	}
 	
@@ -599,18 +647,21 @@
 	.subject-name {
 		font-size: 32rpx;
 		font-weight: bold;
+		color: #333;
+		margin-right: 20rpx;
 	}
 	
 	.subject-department {
-		font-size: 24rpx;
+		font-size: 28rpx;
 		color: #666;
-		background-color: #f5f5f5;
-		padding: 4rpx 12rpx;
-		border-radius: 4rpx;
-		margin-left: 20rpx;
 	}
 	
-	.subject-position, .subject-table {
+	.subject-position {
+		font-size: 28rpx;
+		color: #666;
+	}
+	
+	.subject-table {
 		font-size: 28rpx;
 		color: #666;
 	}
@@ -618,64 +669,45 @@
 	.subject-actions {
 		display: flex;
 		justify-content: flex-end;
-		padding-top: 20rpx;
-		border-top: 1rpx solid #f5f5f5;
 	}
 	
 	.action-btn {
-		margin-left: 30rpx;
-		padding: 6rpx 20rpx;
+		padding: 10rpx 20rpx;
+		margin-left: 20rpx;
 		border-radius: 6rpx;
-		background-color: #f8f8f8;
+		font-size: 28rpx;
 	}
 	
-	.action-btn.delete {
-		background-color: #f8d0d0;
-	}
-	
-	.action-text {
-		font-size: 24rpx;
+	.action-btn:not(.delete) {
+		background-color: #f5f5f5;
 		color: #333;
 	}
 	
-	.action-btn.delete .action-text {
-		color: #e64340;
+	.action-btn.delete {
+		background-color: #ff4d4f;
+		color: #fff;
 	}
 	
-	.load-more {
-		text-align: center;
-		margin: 30rpx 0;
-	}
-	
-	.load-btn {
-		font-size: 28rpx;
-		color: #666;
-		background-color: #f8f8f8;
-	}
-	
-	/* 弹窗样式 */
 	.popup-overlay {
 		position: fixed;
 		top: 0;
 		left: 0;
 		right: 0;
 		bottom: 0;
-		width: 100%;
-		height: 100%;
 		background-color: rgba(0, 0, 0, 0.5);
-		z-index: 9998;
+		z-index: 999;
 	}
 	
 	.popup-content {
 		position: fixed;
-		top: 50%;
 		left: 50%;
+		top: 50%;
 		transform: translate(-50%, -50%);
+		width: 80%;
 		background-color: #fff;
-		border-radius: 16rpx;
-		width: 600rpx;
+		border-radius: 12rpx;
 		padding: 30rpx;
-		z-index: 9999;
+		z-index: 1000;
 	}
 	
 	.popup-title {
@@ -690,48 +722,80 @@
 	}
 	
 	.form-label {
+		display: block;
 		font-size: 28rpx;
 		color: #333;
 		margin-bottom: 10rpx;
-		display: block;
 	}
 	
 	.form-input {
+		width: 100%;
 		height: 80rpx;
-		border: 1rpx solid #eee;
+		background-color: #f5f5f5;
 		border-radius: 8rpx;
 		padding: 0 20rpx;
 		font-size: 28rpx;
 	}
 	
-	.form-picker {
-		height: 80rpx;
-		border: 1rpx solid #eee;
+	.table-selector {
+		background-color: #f5f5f5;
 		border-radius: 8rpx;
-		padding: 0 20rpx;
+		padding: 20rpx;
+	}
+	
+	.selected-tables {
+		margin-bottom: 20rpx;
+	}
+	
+	.selected-table {
+		display: inline-flex;
+		align-items: center;
+		background-color: #fff;
+		border-radius: 6rpx;
+		padding: 10rpx 20rpx;
+		margin-right: 10rpx;
+		margin-bottom: 10rpx;
+	}
+	
+	.remove-table {
+		margin-left: 10rpx;
+		color: #ff4d4f;
+		font-size: 32rpx;
+	}
+	
+	.form-picker {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		font-size: 28rpx;
+		padding: 10rpx 20rpx;
+		background-color: #fff;
+		border-radius: 8rpx;
 	}
 	
 	.popup-btns {
 		display: flex;
-		justify-content: space-between;
-		margin-top: 40rpx;
-	}
-	
-	.cancel-btn, .confirm-btn {
-		width: 45%;
+		justify-content: flex-end;
+		margin-top: 30rpx;
 	}
 	
 	.cancel-btn {
+		margin-right: 20rpx;
 		background-color: #f5f5f5;
-		color: #666;
+		color: #333;
 	}
 	
 	.confirm-btn {
-		background-color: #07c160;
+		background-color: #007AFF;
 		color: #fff;
+	}
+	
+	.load-more {
+		text-align: center;
+		margin-top: 20rpx;
+	}
+	
+	.load-btn {
+		background-color: #f5f5f5;
+		color: #333;
 	}
 </style> 

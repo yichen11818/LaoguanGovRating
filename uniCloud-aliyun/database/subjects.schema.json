@@ -17,9 +17,12 @@
       "title": "姓名"
     },
     "table_id": {
-      "bsonType": "string",
-      "description": "所属评分表ID",
-      "foreignKey": "rating_tables._id",
+      "bsonType": "array",
+      "description": "所属评分表ID数组",
+      "items": {
+        "bsonType": "string",
+        "foreignKey": "rating_tables._id"
+      },
       "title": "评分表ID"
     },
     "position": {

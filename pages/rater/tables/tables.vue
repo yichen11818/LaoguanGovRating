@@ -2,9 +2,9 @@
 	<view class="container">
 		<view class="filter-bar">
 			<view class="filter-item">
-				<picker @change="handleTypeChange" :value="currentTypeIndex" :range="typeOptions" range-key="name">
+				<picker @change="handleTypeChange" :value="currentTypeIndex || 0" :range="typeOptions || []" range-key="name">
 					<view class="picker-box">
-						<text class="picker-text">{{typeOptions[currentTypeIndex].name}}</text>
+						<text class="picker-text">{{(typeOptions && typeOptions[currentTypeIndex]) ? typeOptions[currentTypeIndex].name : '全部类型'}}</text>
 						<text class="picker-arrow">▼</text>
 					</view>
 				</picker>
@@ -14,17 +14,17 @@
 		<!-- 状态卡片 -->
 		<view class="status-card">
 			<view class="status-item">
-				<text class="status-number">{{stats.total || 0}}</text>
+				<text class="status-number">{{stats && stats.total ? stats.total : 0}}</text>
 				<text class="status-label">总评分表</text>
 			</view>
 			<view class="status-divider"></view>
 			<view class="status-item">
-				<text class="status-number">{{stats.completed || 0}}</text>
+				<text class="status-number">{{stats && stats.completed ? stats.completed : 0}}</text>
 				<text class="status-label">已完成</text>
 			</view>
 			<view class="status-divider"></view>
 			<view class="status-item">
-				<text class="status-number">{{stats.pending || 0}}</text>
+				<text class="status-number">{{stats && stats.pending ? stats.pending : 0}}</text>
 				<text class="status-label">待评分</text>
 			</view>
 		</view>
@@ -33,53 +33,57 @@
 		<view class="table-list">
 			<view class="section-title">我的评分表</view>
 			
-			<view class="no-data" v-if="tables.length === 0">
+			<view class="no-data" v-if="!tables || tables.length === 0">
 				<image class="no-data-icon" src="/static/images/no-data.png" mode="aspectFit"></image>
 				<text class="no-data-text">暂无评分表</text>
 			</view>
 			
-			<view class="table-card" v-for="(table, index) in tables" :key="index" @click="goToRating(table._id)">
+			<view class="table-card" v-for="(table, index) in tables || []" :key="index" @click="goToRating(table._id)">
 				<view class="table-header">
-					<text class="table-name">{{table.name}}</text>
-					<view class="table-status" :class="{'status-completed': table.completionRate === 100, 'status-progress': table.completionRate > 0 && table.completionRate < 100, 'status-pending': table.completionRate === 0}">
-						<text>{{getStatusText(table.completionRate)}}</text>
+					<text class="table-name">{{table && table.name ? table.name : '未命名评分表'}}</text>
+					<view class="table-status" :class="{
+						'status-completed': table && table.completionRate === 100, 
+						'status-progress': table && table.completionRate > 0 && table.completionRate < 100, 
+						'status-pending': !table || !table.completionRate || table.completionRate === 0
+					}">
+						<text>{{getStatusText(table && table.completionRate ? table.completionRate : 0)}}</text>
 					</view>
 				</view>
 				<view class="table-info">
-					<text class="table-type">{{getTableTypeName(table.type)}}</text>
-					<text class="table-category" v-if="table.category">{{table.category}}</text>
+					<text class="table-type">{{table && table.type ? getTableTypeName(table.type) : '未知类型'}}</text>
+					<text class="table-category" v-if="table && table.category">{{table.category}}</text>
 				</view>
 				<view class="table-progress">
 					<view class="progress-label">
 						<text>评分进度</text>
-						<text>{{table.completionRate || 0}}%</text>
+						<text>{{table && table.completionRate ? table.completionRate : 0}}%</text>
 					</view>
-					<progress :percent="table.completionRate || 0" stroke-width="4" activeColor="#07c160" backgroundColor="#e6e6e6" />
+					<progress :percent="table && table.completionRate ? table.completionRate : 0" stroke-width="4" activeColor="#07c160" backgroundColor="#e6e6e6" />
 				</view>
 				<view class="table-subjects">
 					<view class="subjects-header">
 						<text class="subjects-title">考核对象</text>
-						<text class="subjects-count">{{table.subjectCount || 0}}个</text>
+						<text class="subjects-count">{{table && table.subjectCount ? table.subjectCount : 0}}个</text>
 					</view>
 					<view class="subjects-info">
-						<view class="subject-item" v-for="(subject, sIndex) in table.subjects || []" :key="sIndex" v-if="sIndex < 3">
-							<text class="subject-name">{{subject.name}}</text>
-							<view class="subject-status" v-if="subject.rated">
-								<text class="subject-score">{{subject.totalScore || 0}}分</text>
+						<view class="subject-item" v-for="(subject, sIndex) in table && table.subjects ? table.subjects : []" :key="sIndex" v-if="sIndex < 3">
+							<text class="subject-name">{{subject && subject.name ? subject.name : '未命名对象'}}</text>
+							<view class="subject-status" v-if="subject && subject.rated">
+								<text class="subject-score">{{subject.totalScore !== undefined ? subject.totalScore : 0}}分</text>
 								<text class="status-rated">已评分</text>
 							</view>
 							<view class="subject-status" v-else>
 								<text class="status-pending">待评分</text>
 							</view>
 						</view>
-						<view class="more-subjects" v-if="(table.subjects || []).length > 3">
+						<view class="more-subjects" v-if="table && table.subjects && table.subjects.length > 3">
 							<text>查看更多</text>
 						</view>
 					</view>
 				</view>
 				<view class="table-footer">
 					<view class="footer-info">
-						<text class="update-time">最近更新: {{formatDate(table.updateTime)}}</text>
+						<text class="update-time">最近更新: {{formatDate(table && table.updateTime ? table.updateTime : null)}}</text>
 					</view>
 					<button class="action-btn" @click.stop="goToRating(table._id)">去评分</button>
 				</view>
@@ -87,7 +91,7 @@
 		</view>
 		
 		<!-- 加载更多 -->
-		<view class="load-more" v-if="tables.length > 0 && hasMoreData">
+		<view class="load-more" v-if="tables && tables.length > 0 && hasMoreData">
 			<button class="load-btn" size="mini" @click="loadMore" :loading="isLoading">加载更多</button>
 		</view>
 	</view>
@@ -114,11 +118,23 @@
 				pageSize: 10,
 				total: 0,
 				hasMoreData: false,
-				isLoading: false
+				isLoading: false,
+				username: ''
 			}
 		},
 		onShow() {
 			// 每次页面显示时重新加载数据
+			this.reloadData();
+		},
+		onLoad() {
+			// 检查并确保有用户名
+			this.username = this.ensureUsername();
+			console.log('当前用户名:', this.username);
+			
+			// 初始化默认数据，防止空值引用
+			this.initDefaultData();
+			
+			// 初始加载
 			this.reloadData();
 		},
 		onPullDownRefresh() {
@@ -128,6 +144,53 @@
 			});
 		},
 		methods: {
+			// 初始化默认数据
+			initDefaultData() {
+				// 确保typeOptions有默认值
+				if (!this.typeOptions || !this.typeOptions.length) {
+					this.typeOptions = [{ type: '', name: '全部类型' }];
+				}
+				
+				// 确保stats有默认值
+				if (!this.stats) {
+					this.stats = { total: 0, completed: 0, pending: 0 };
+				}
+				
+				// 确保tables数组已初始化
+				if (!this.tables) {
+					this.tables = [];
+				}
+			},
+			
+			// 确保有用户名
+			ensureUsername() {
+				let username = uni.getStorageSync('username');
+				if (!username) {
+					// 尝试从用户信息中获取
+					const userInfoStr = uni.getStorageSync('userInfo');
+					if (userInfoStr) {
+						try {
+							const userInfo = JSON.parse(userInfoStr);
+							if (userInfo && userInfo.username) {
+								username = userInfo.username;
+								uni.setStorageSync('username', username);
+								console.log('从userInfo中获取并保存用户名:', username);
+							}
+						} catch (e) {
+							console.error('解析userInfo失败:', e);
+						}
+					}
+				}
+				
+				// 如果仍然无法获取用户名，可以考虑跳转到登录页面
+				if (!username) {
+					console.warn('无法获取用户名，可能需要重新登录');
+					// 跳转到登录页或其他处理...
+				}
+				
+				return username || '';
+			},
+			
 			// 重新加载数据
 			reloadData(callback) {
 				this.page = 1;
@@ -141,16 +204,35 @@
 			
 			// 加载评分统计数据
 			loadStats() {
+				// 确保有用户名
+				this.username = this.ensureUsername();
+				
+				// 如果没有获取到用户名，可以直接返回
+				if (!this.username) {
+					console.warn('无法获取用户名，跳过加载评分统计');
+					return;
+				}
+				
 				uniCloud.callFunction({
 					name: 'rating',
 					data: {
 						action: 'getRaterStats',
-						data: {}
+						data: {
+							rater: this.username || ''
+						}
 					}
 				}).then(res => {
 					if (res.result.code === 0) {
-						this.stats = res.result.data || this.stats;
+						this.stats = res.result.data || { total: 0, completed: 0, pending: 0 };
+					} else {
+						console.error('获取评分统计失败:', res.result.msg);
+						// 确保stats有默认值
+						this.stats = { total: 0, completed: 0, pending: 0 };
 					}
+				}).catch(err => {
+					console.error('调用getRaterStats失败:', err);
+					// 确保stats有默认值
+					this.stats = { total: 0, completed: 0, pending: 0 };
 				});
 			},
 			
@@ -159,6 +241,18 @@
 				this.isLoading = true;
 				
 				const type = this.typeOptions[this.currentTypeIndex].type;
+				// 确保有用户名
+				this.username = this.ensureUsername();
+				
+				// 如果没有获取到用户名，可以直接返回
+				if (!this.username) {
+					this.isLoading = false;
+					console.warn('无法获取用户名，跳过加载评分表');
+					if (typeof callback === 'function') {
+						callback();
+					}
+					return;
+				}
 				
 				uni.showLoading({
 					title: '加载中...'
@@ -171,7 +265,8 @@
 						data: {
 							type: type,
 							page: this.page,
-							pageSize: this.pageSize
+							pageSize: this.pageSize,
+							rater: this.username || ''
 						}
 					}
 				}).then(res => {
@@ -179,17 +274,18 @@
 					this.isLoading = false;
 					
 					if (res.result.code === 0) {
-						const data = res.result.data;
+						const data = res.result.data || { list: [], total: 0 };
 						
 						if (this.page === 1) {
-							this.tables = data.list;
+							this.tables = data.list || [];
 						} else {
-							this.tables = this.tables.concat(data.list);
+							this.tables = (this.tables || []).concat(data.list || []);
 						}
 						
-						this.total = data.total;
-						this.hasMoreData = this.tables.length < this.total;
+						this.total = data.total || 0;
+						this.hasMoreData = (this.tables && this.tables.length) < this.total;
 					} else {
+						console.error('获取评分表列表失败:', res.result.msg);
 						uni.showToast({
 							title: res.result.msg || '加载失败',
 							icon: 'none'
@@ -202,7 +298,7 @@
 				}).catch(err => {
 					uni.hideLoading();
 					this.isLoading = false;
-					console.error(err);
+					console.error('调用getRaterTables失败:', err);
 					uni.showToast({
 						title: '加载失败，请检查网络',
 						icon: 'none'
@@ -243,18 +339,33 @@
 			
 			// 格式化日期
 			formatDate(timestamp) {
-				if (!timestamp) return '';
+				if (!timestamp) return '暂无更新';
 				
-				const date = new Date(timestamp);
-				const year = date.getFullYear();
-				const month = String(date.getMonth() + 1).padStart(2, '0');
-				const day = String(date.getDate()).padStart(2, '0');
-				
-				return `${year}-${month}-${day}`;
+				try {
+					const date = new Date(timestamp);
+					if (isNaN(date.getTime())) return '暂无更新';
+					
+					const year = date.getFullYear();
+					const month = String(date.getMonth() + 1).padStart(2, '0');
+					const day = String(date.getDate()).padStart(2, '0');
+					
+					return `${year}-${month}-${day}`;
+				} catch (e) {
+					console.error('日期格式化错误:', e);
+					return '暂无更新';
+				}
 			},
 			
 			// 跳转到评分页面
 			goToRating(tableId) {
+				if (!tableId) {
+					uni.showToast({
+						title: '评分表ID不存在',
+						icon: 'none'
+					});
+					return;
+				}
+				
 				uni.navigateTo({
 					url: `/pages/rater/rating/rating?table_id=${tableId}`
 				});

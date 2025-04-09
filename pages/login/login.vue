@@ -157,6 +157,7 @@
 						// 保存用户信息和token
 						uni.setStorageSync('token', data.token);
 						uni.setStorageSync('userInfo', JSON.stringify(data.user));
+						uni.setStorageSync('username', this.formData.username);
 						console.log('用户信息和token已保存到本地存储');
 						
 						uni.showToast({

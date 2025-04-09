@@ -24,6 +24,8 @@ exports.main = async (event, context) => {
       return await getRatingBySubject(data);
     case 'getRatingStats':
       return await getRatingStats(data);
+    case 'getRaterStats':
+      return await getRaterStats(data, context);
     default:
       return {
         code: -1,
@@ -374,6 +376,131 @@ async function getRatingStats(data) {
       code: 0,
       msg: '获取评分统计成功',
       data: statsResult
+    };
+  } catch (e) {
+    return {
+      code: -1,
+      msg: '获取评分统计失败',
+      error: e.message
+    };
+  }
+}
+
+// 获取评委个人的评分统计
+async function getRaterStats(data, context) {
+  try {
+    let username = null;
+    
+    // 方法1: 直接从data中获取用户名
+    if (data.username) {
+      username = data.username;
+    }
+    
+    // 方法2: 从token中获取用户信息(如果有)
+    if (!username) {
+      try {
+        const clientInfo = context.CLIENTINFO || "{}";
+        const parsedClientInfo = JSON.parse(clientInfo);
+        const uniIdToken = parsedClientInfo.uniIdToken;
+        
+        if (uniIdToken) {
+          const payload = uniCloud.parseToken(uniIdToken);
+          username = payload.uid;
+        }
+      } catch (e) {
+        console.error('解析token失败', e);
+      }
+    }
+    
+    // 如果没有获取到用户名，尝试从环境获取当前用户
+    if (!username && data.uniIdToken) {
+      try {
+        const payload = uniCloud.parseToken(data.uniIdToken);
+        username = payload.uid;
+      } catch (e) {
+        console.error('解析前端传递的token失败', e);
+      }
+    }
+    
+    // 如果仍然没有获取到用户名，检查是否在本地调试模式下，使用请求中的rater参数
+    if (!username && data.rater) {
+      username = data.rater;
+    }
+    
+    // 如果仍然没有获取到用户名，返回错误
+    if (!username) {
+      return {
+        code: -1,
+        msg: '用户未登录或登录已过期，请重新登录 - 请在data中传入username或rater参数'
+      };
+    }
+    
+    // 查询用户信息
+    const userInfo = await userCollection.where({
+      username: username
+    }).get();
+    
+    if (userInfo.data.length === 0) {
+      return {
+        code: -1,
+        msg: `用户 ${username} 不存在`
+      };
+    }
+    
+    const user = userInfo.data[0];
+    const rater = user.username;
+    const assignedTables = user.assignedTables || [];
+    
+    // 如果没有分配的评分表
+    if (assignedTables.length === 0) {
+      return {
+        code: 0,
+        msg: '获取评分统计成功',
+        data: {
+          total: 0,
+          completed: 0,
+          pending: 0
+        }
+      };
+    }
+    
+    // 获取所有分配的评分表
+    const tables = await ratingTableCollection.where({
+      _id: db.command.in(assignedTables)
+    }).get();
+    
+    let totalSubjects = 0;
+    let completed = 0;
+    
+    // 遍历每个评分表，计算完成情况
+    for (const table of tables.data) {
+      // 获取该表的考核对象
+      const subjects = await subjectCollection.where({
+        table_id: db.command.in([table._id])
+      }).get();
+      
+      // 获取该表的评分记录
+      const ratings = await ratingCollection.where({
+        table_id: table._id,
+        rater
+      }).get();
+      
+      // 统计数量
+      totalSubjects += subjects.data.length;
+      completed += ratings.data.length;
+    }
+    
+    // 计算待评分数量
+    const pending = totalSubjects - completed;
+    
+    return {
+      code: 0,
+      msg: '获取评分统计成功',
+      data: {
+        total: totalSubjects,
+        completed,
+        pending
+      }
     };
   } catch (e) {
     return {

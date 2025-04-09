@@ -27,6 +27,8 @@ exports.main = async (event, context) => {
       return await deleteTableItem(data);
     case 'changeRater':
       return await changeRater(data);
+    case 'getRaterTables':
+      return await getRaterTables(data, context);
     default:
       return {
         code: -1,
@@ -470,4 +472,192 @@ async function changeRater(data) {
       error: e.message
     };
   }
+}
+
+// 获取评委的评分表列表
+async function getRaterTables(data, context) {
+  const { type, page = 1, pageSize = 10 } = data;
+  
+  try {
+    let username = null;
+    
+    // 方法1: 直接从data中获取用户名
+    if (data.username) {
+      username = data.username;
+    }
+    
+    // 方法2: 从token中获取用户信息(如果有)
+    if (!username) {
+      try {
+        const clientInfo = context.CLIENTINFO || "{}";
+        const parsedClientInfo = JSON.parse(clientInfo);
+        const uniIdToken = parsedClientInfo.uniIdToken;
+        
+        if (uniIdToken) {
+          const payload = uniCloud.parseToken(uniIdToken);
+          username = payload.uid;
+        }
+      } catch (e) {
+        console.error('解析token失败', e);
+      }
+    }
+    
+    // 如果没有获取到用户名，尝试从环境获取当前用户
+    if (!username && data.uniIdToken) {
+      try {
+        const payload = uniCloud.parseToken(data.uniIdToken);
+        username = payload.uid;
+      } catch (e) {
+        console.error('解析前端传递的token失败', e);
+      }
+    }
+    
+    // 如果仍然没有获取到用户名，检查是否在本地调试模式下，使用请求中的rater参数
+    if (!username && data.rater) {
+      username = data.rater;
+    }
+    
+    // 如果仍然没有获取到用户名，返回错误
+    if (!username) {
+      return {
+        code: -1,
+        msg: '用户未登录或登录已过期，请重新登录 - 请在data中传入username或rater参数'
+      };
+    }
+    
+    // 查询用户信息
+    const userInfo = await userCollection.where({
+      username: username
+    }).get();
+    
+    if (userInfo.data.length === 0) {
+      return {
+        code: -1,
+        msg: `用户 ${username} 不存在`
+      };
+    }
+    
+    const user = userInfo.data[0];
+    const rater = user.username;
+    const assignedTables = user.assignedTables || [];
+    
+    // 如果没有分配的评分表
+    if (assignedTables.length === 0) {
+      return {
+        code: 0,
+        msg: '获取评分表列表成功',
+        data: {
+          list: [],
+          total: 0,
+          page,
+          pageSize
+        }
+      };
+    }
+    
+    // 查询评委的评分表
+    let query = ratingTableCollection.where({
+      _id: db.command.in(assignedTables)
+    });
+    
+    // 筛选条件
+    if (type) {
+      query = query.where({
+        type
+      });
+    }
+    
+    // 分页查询
+    const tableList = await query.skip((page - 1) * pageSize).limit(pageSize).get();
+    
+    // 获取总数
+    const countResult = await query.count();
+    
+    // 丰富表格数据，添加考核对象和完成情况
+    const enrichedList = await Promise.all(tableList.data.map(async (table) => {
+      // 获取该表的考核对象
+      const subjects = await subjectCollection.where({
+        table_id: db.command.in([table._id])
+      }).get();
+      
+      // 获取该表的评分记录
+      const ratings = await db.collection('ratings').where({
+        table_id: table._id,
+        rater
+      }).get();
+      
+      // 计算完成率
+      const subjectCount = subjects.data.length;
+      const ratedCount = ratings.data.length;
+      const completionRate = subjectCount > 0 ? Math.floor((ratedCount / subjectCount) * 100) : 0;
+      
+      // 添加评分状态到考核对象
+      const subjectsWithStatus = subjects.data.map(subject => {
+        const rating = ratings.data.find(r => r.subject === subject._id);
+        return {
+          ...subject,
+          rated: !!rating,
+          totalScore: rating ? rating.total_score : 0
+        };
+      });
+      
+      return {
+        ...table,
+        subjectCount,
+        completionRate,
+        subjects: subjectsWithStatus,
+        updateTime: ratings.data.length > 0 ? Math.max(...ratings.data.map(r => r.rating_date ? new Date(r.rating_date).getTime() : 0)) : null
+      };
+    }));
+    
+    return {
+      code: 0,
+      msg: '获取评分表列表成功',
+      data: {
+        list: enrichedList,
+        total: countResult.total,
+        page,
+        pageSize
+      }
+    };
+  } catch (e) {
+    return {
+      code: -1,
+      msg: '获取评分表列表失败',
+      error: e.message
+    };
+  }
+}
+
+// 从token获取用户信息的辅助函数
+async function getUserByToken(token) {
+  if (!token) {
+    return null;
+  }
+  
+  try {
+    // 解析token获取用户ID
+    const payload = uniCloud.parseToken(token);
+    const userId = payload.uid;
+    
+    // 查询用户信息
+    const userInfo = await userCollection.where({
+      username: userId
+    }).get();
+    
+    if (userInfo.data.length === 0) {
+      return null;
+    }
+    
+    return userInfo.data[0];
+  } catch (e) {
+    console.error('获取用户信息失败', e);
+    return null;
+  }
+}
+
+// 此函数已不再使用
+function getUniIdToken() {
+  // 在云函数中无法使用此方法，需要通过context获取
+  return null;
 } 

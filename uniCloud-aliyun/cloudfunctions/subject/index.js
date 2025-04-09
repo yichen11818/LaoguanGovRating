@@ -31,7 +31,7 @@ async function createSubject(data) {
   const { name, table_id, position, department } = data;
   
   // 参数校验
-  if (!name || !table_id) {
+  if (!name || !table_id || !Array.isArray(table_id) || table_id.length === 0) {
     return {
       code: -1,
       msg: '缺少必要参数'
@@ -40,13 +40,14 @@ async function createSubject(data) {
   
   try {
     // 检查评分表是否存在
-    const tableInfo = await ratingTableCollection.doc(table_id).get();
-    
-    if (tableInfo.data.length === 0) {
-      return {
-        code: -1,
-        msg: '评分表不存在'
-      };
+    for (const tableId of table_id) {
+      const tableInfo = await ratingTableCollection.doc(tableId).get();
+      if (tableInfo.data.length === 0) {
+        return {
+          code: -1,
+          msg: `评分表 ${tableId} 不存在`
+        };
+      }
     }
     
     // 创建考核对象
@@ -78,6 +79,26 @@ async function updateSubject(data) {
   const { subjectId, updateData } = data;
   
   try {
+    // 如果更新了评分表，需要验证评分表是否存在
+    if (updateData.table_id) {
+      if (!Array.isArray(updateData.table_id) || updateData.table_id.length === 0) {
+        return {
+          code: -1,
+          msg: '评分表ID不能为空'
+        };
+      }
+      
+      for (const tableId of updateData.table_id) {
+        const tableInfo = await ratingTableCollection.doc(tableId).get();
+        if (tableInfo.data.length === 0) {
+          return {
+            code: -1,
+            msg: `评分表 ${tableId} 不存在`
+          };
+        }
+      }
+    }
+    
     await subjectCollection.doc(subjectId).update(updateData);
     
     return {
@@ -122,7 +143,9 @@ async function getSubjects(data) {
     
     // 筛选条件
     if (table_id) {
-      query = query.where({ table_id });
+      query = query.where({
+        table_id: db.command.in([table_id])
+      });
     }
     
     // 分页查询
@@ -166,14 +189,17 @@ async function getSubjectDetail(data) {
     
     // 获取关联的评分表信息
     const subject = subjectInfo.data[0];
-    const tableInfo = await ratingTableCollection.doc(subject.table_id).get();
+    const tableIds = subject.table_id || [];
+    const tableInfo = await ratingTableCollection.where({
+      _id: db.command.in(tableIds)
+    }).get();
     
     return {
       code: 0,
       msg: '获取考核对象详情成功',
       data: {
         subject: subject,
-        table: tableInfo.data.length > 0 ? tableInfo.data[0] : null
+        tables: tableInfo.data
       }
     };
   } catch (e) {
