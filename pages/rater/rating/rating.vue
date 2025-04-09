@@ -116,7 +116,7 @@
 					data: {
 						action: 'getTableDetail',
 						data: {
-							table_id: this.tableId
+							tableId: this.tableId
 						}
 					}
 				}).then(res => {
@@ -187,7 +187,7 @@
 					data: {
 						action: 'getRatingBySubject',
 						data: {
-							table_id: this.tableId,
+							tableId: this.tableId,
 							subject: this.currentSubject.name
 						}
 					}
@@ -275,7 +275,7 @@
 					data: {
 						action: 'submitRating',
 						data: {
-							table_id: this.tableId,
+							tableId: this.tableId,
 							rater: userInfo.username,
 							subject: this.currentSubject.name,
 							scores: this.scores,
@@ -294,7 +294,7 @@
 						// 更新评分记录
 						this.existingRating = {
 							_id: res.result.data.id,
-							table_id: this.tableId,
+							tableId: this.tableId,
 							rater: userInfo.username,
 							subject: this.currentSubject.name,
 							scores: this.scores,
