@@ -32,11 +32,6 @@
 				</view>
 			</view>
 			
-			<view class="comment-area">
-				<text class="section-title">评语</text>
-				<textarea v-model="comment" placeholder="请输入评语（选填）" class="comment-input" />
-			</view>
-			
 			<view class="total-score">
 				<text class="total-label">总分：</text>
 				<text class="total-value">{{calculateTotalScore()}} / {{calculateMaxScore()}}</text>
@@ -172,7 +167,6 @@
 				
 				// 重置评分
 				this.initScores();
-				this.comment = '';
 				
 				// 加载已有评分记录
 				this.loadExistingRating();
@@ -197,8 +191,6 @@
 						
 						// 填充已有评分
 						if (this.existingRating) {
-							this.comment = this.existingRating.comment || '';
-							
 							// 更新评分项分数
 							if (this.existingRating.scores && this.existingRating.scores.length > 0) {
 								this.existingRating.scores.forEach((score, index) => {
@@ -424,22 +416,6 @@
 	
 	.score-input {
 		padding: 0 10rpx;
-	}
-	
-	.comment-area {
-		margin-top: 40rpx;
-		padding-top: 30rpx;
-		border-top: 1rpx solid #f5f5f5;
-	}
-	
-	.comment-input {
-		width: 100%;
-		height: 200rpx;
-		border: 1rpx solid #eee;
-		border-radius: 8rpx;
-		padding: 20rpx;
-		font-size: 28rpx;
-		box-sizing: border-box;
 	}
 	
 	.total-score {

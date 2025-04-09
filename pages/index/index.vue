@@ -190,6 +190,11 @@
 					
 					this.checkRoleAndLogin();
 					this.loadData();
+					
+					// 如果是评分员角色，添加欢迎日志
+					if (userInfo.role === 'rater' || userInfo.role === 2) {
+						console.log(`欢迎您，${userInfo.name || userInfo.username} 评分员`);
+					}
 				} catch (e) {
 					console.error('解析用户信息出错:', e);
 					this.resetUserState();
@@ -358,6 +363,9 @@
 								const statsData = statsRes.result.data;
 								this.raterStats.ratedCount = statsData.completed || 0;
 								this.raterStats.pendingCount = statsData.pending || 0;
+								
+								// 添加欢迎信息和任务统计日志
+								console.log(`欢迎您，${this.userInfo.name || this.userInfo.username} ${this.roleText}| 我的评分任务 ${this.raterStats.tableCount} 评分表数量 ${this.raterStats.ratedCount} 已评分数量 ${this.raterStats.pendingCount} 待评分数量`);
 							}
 						}).catch(err => {
 							console.error('获取评分统计数据失败:', err);
