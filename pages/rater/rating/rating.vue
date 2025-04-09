@@ -116,7 +116,7 @@
 					data: {
 						action: 'getTableDetail',
 						data: {
-							tableId: this.tableId
+							table_id: this.tableId
 						}
 					}
 				}).then(res => {

@@ -313,10 +313,18 @@
 				});
 			},
 			loadRaterData() {
+				// 先重置统计数据，防止数据重复累加
+				this.raterStats = {
+					tableCount: 0,
+					ratedCount: 0,
+					pendingCount: 0
+				};
+				
+				// 使用云函数获取评分员的评分表数量
 				uniCloud.callFunction({
 					name: 'ratingTable',
 					data: {
-						action: 'getTables',
+						action: 'getRaterTables',
 						data: {
 							rater: this.userInfo.username
 						}
@@ -326,43 +334,37 @@
 						const tables = res.result.data.list || [];
 						this.raterStats.tableCount = tables.length;
 						
+						// 只取前5个评分表显示在首页
 						this.tables = tables.slice(0, 5);
 						
+						// 处理每个表格的评分进度
 						this.tables.forEach((table, index) => {
-							uniCloud.callFunction({
-								name: 'subject',
+							// 设置默认进度
+							this.$set(this.tables[index], 'completion', table.completionRate || 0);
+						});
+						
+						// 使用专门的云函数获取评分统计数据
+						uniCloud.callFunction({
+							name: 'rating',
+							data: {
+								action: 'getRaterStats',
 								data: {
-									action: 'getSubjects',
-									data: {
-										table_id: table._id
-									}
+									rater: this.userInfo.username
 								}
-							}).then(subjectRes => {
-								const subjects = subjectRes.result.data.list || [];
-								const totalSubjects = subjects.length;
-								
-								uniCloud.callFunction({
-									name: 'rating',
-									data: {
-										action: 'getRatings',
-										data: {
-											table_id: table._id,
-											rater: this.userInfo.username
-										}
-									}
-								}).then(ratingRes => {
-									const ratings = ratingRes.result.data.list || [];
-									const ratedCount = ratings.length;
-									
-									const completion = totalSubjects > 0 ? Math.round((ratedCount / totalSubjects) * 100) : 0;
-									this.$set(this.tables[index], 'completion', completion);
-									
-									this.raterStats.ratedCount += ratedCount;
-									this.raterStats.pendingCount += (totalSubjects - ratedCount);
-								});
-							});
+							}
+						}).then(statsRes => {
+							console.log('获取评分员统计数据:', statsRes);
+							if (statsRes.result.code === 0) {
+								const statsData = statsRes.result.data;
+								this.raterStats.ratedCount = statsData.completed || 0;
+								this.raterStats.pendingCount = statsData.pending || 0;
+							}
+						}).catch(err => {
+							console.error('获取评分统计数据失败:', err);
 						});
 					}
+				}).catch(err => {
+					console.error('获取评分表数据失败:', err);
 				});
 			},
 			resetUserState() {
