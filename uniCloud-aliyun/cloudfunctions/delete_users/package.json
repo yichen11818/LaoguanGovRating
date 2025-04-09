@@ -1,0 +1,12 @@
+{
+  "name": "delete_users",
+  "version": "1.0.0",
+  "description": "删除除了指定手机号以外的所有用户",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {}
+} 
