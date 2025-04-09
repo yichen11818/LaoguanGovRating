@@ -34,7 +34,7 @@
 			<view class="section-title">我的评分表</view>
 			
 			<view class="no-data" v-if="!tables || tables.length === 0">
-				<image class="no-data-icon" src="/static/images/no-data.png" mode="aspectFit"></image>
+				<image class="no-data-icon" src="@/static/images/no-data.png" mode="aspectFit"></image>
 				<text class="no-data-text">暂无评分表</text>
 			</view>
 			
@@ -66,7 +66,7 @@
 						<text class="subjects-count">{{table && table.subjectCount ? table.subjectCount : 0}}个</text>
 					</view>
 					<view class="subjects-info">
-						<view class="subject-item" v-for="(subject, sIndex) in table && table.subjects ? table.subjects : []" :key="sIndex" v-if="sIndex < 3">
+						<view class="subject-item" v-for="(subject, subjectIndex) in table && table.subjects ? table.subjects : []" :key="subjectIndex" v-if="subjectIndex < 3">
 							<text class="subject-name">{{subject && subject.name ? subject.name : '未命名对象'}}</text>
 							<view class="subject-status" v-if="subject && subject.rated">
 								<text class="subject-score">{{subject.totalScore !== undefined ? subject.totalScore : 0}}分</text>
@@ -119,7 +119,8 @@
 				total: 0,
 				hasMoreData: false,
 				isLoading: false,
-				username: ''
+				username: '',
+				hasTriggeredLogin: false
 			}
 		},
 		onShow() {
@@ -128,6 +129,15 @@
 			const token = uni.getStorageSync('uni_id_token');
 			const username = uni.getStorageSync('username');
 			console.log('页面显示时 token状态:', token ? '存在' : '不存在', '用户名状态:', username ? `存在(${username})` : '不存在');
+			
+			// 设置一个标志，防止onLoad中的登录检查和onShow中的产生冲突
+			this.hasTriggeredLogin = this.hasTriggeredLogin || false;
+			
+			// 如果已经触发了登录跳转，则不执行后续代码
+			if (this.hasTriggeredLogin) {
+				console.log('已触发登录跳转，跳过onShow中的数据加载');
+				return;
+			}
 			
 			// 每次页面显示时重新加载数据
 			console.log('开始重新加载数据...');
@@ -140,39 +150,17 @@
 			const token = uni.getStorageSync('uni_id_token');
 			console.log('当前token状态:', token ? '已获取token' : '没有token', '长度:', token ? token.length : 0);
 			
-			if (!token) {
-				console.warn('【跳转原因1】用户未登录，无token，准备跳转到登录页面');
-				uni.showToast({
-					title: '请先登录',
-					icon: 'none',
-					duration: 2000
-				});
-				
-				// 延迟跳转，让用户看到提示
-				setTimeout(() => {
-					console.log('执行跳转到登录页...');
-					uni.navigateTo({
-						url: '/pages/login/login',
-						success: () => {
-							console.log('跳转到登录页成功');
-						},
-						fail: (err) => {
-							console.error('跳转到登录页失败:', err);
-						}
-					});
-				}, 1500);
-				return;
-			}
-			
-			// 检查并确保有用户名
-			console.log('开始获取用户名...');
+			// 获取用户名，不立即判断跳转
 			this.username = this.ensureUsername();
 			console.log('获取用户名结果:', this.username ? `成功(${this.username})` : '失败');
 			
-			if (!this.username) {
-				console.warn('【跳转原因2】无法获取用户名，准备跳转到登录页面');
+			// 允许用户名存在但没有token的情况
+			// 如果用户名和token都不存在，才跳转到登录页
+			if (!token && !this.username) {
+				console.warn('【跳转原因】用户未登录，无token且无用户名，准备跳转到登录页面');
+				this.hasTriggeredLogin = true; // 设置标志
 				uni.showToast({
-					title: '用户信息异常，请重新登录',
+					title: '请先登录',
 					icon: 'none',
 					duration: 2000
 				});
@@ -370,10 +358,17 @@
 						console.error('获取评分统计失败:', res.result ? res.result.msg : '未知错误');
 						// 确保stats有默认值
 						this.stats = { total: 0, completed: 0, pending: 0 };
-						uni.showToast({
-							title: res.result && res.result.msg ? res.result.msg : '获取评分统计失败',
-							icon: 'none'
-						});
+						
+						// 检查是否是因为登录问题
+						if (res.result && res.result.msg && res.result.msg.includes('登录')) {
+							console.warn('检测到登录相关错误，但不立即跳转');
+							// 在这里不跳转，让onLoad或onShow中的逻辑处理
+						} else {
+							uni.showToast({
+								title: res.result && res.result.msg ? res.result.msg : '获取评分统计失败',
+								icon: 'none'
+							});
+						}
 					}
 				}).catch(err => {
 					uni.hideLoading();
@@ -466,10 +461,17 @@
 						console.log('当前表格数据总量:', this.tables.length, '是否有更多数据:', this.hasMoreData);
 					} else {
 						console.error('获取评分表列表失败:', res.result ? res.result.msg : '未知错误', '详细信息:', JSON.stringify(res));
-						uni.showToast({
-							title: res.result && res.result.msg ? res.result.msg : '加载失败',
-							icon: 'none'
-						});
+						
+						// 检查是否是因为登录问题
+						if (res.result && res.result.msg && res.result.msg.includes('登录')) {
+							console.warn('检测到登录相关错误，但不立即跳转');
+							// 不立即跳转，由onLoad或onShow统一处理
+						} else {
+							uni.showToast({
+								title: res.result && res.result.msg ? res.result.msg : '加载失败',
+								icon: 'none'
+							});
+						}
 					}
 					
 					if (typeof callback === 'function') {
