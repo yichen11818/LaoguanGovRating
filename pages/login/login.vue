@@ -160,17 +160,44 @@
 						uni.setStorageSync('username', this.formData.username);
 						console.log('用户信息和token已保存到本地存储');
 						
+						// 检查是否使用初始密码登录
+						const phone = data.user.phone;
+						const defaultPassword = phone ? phone.slice(-6) : '';
+						const isUsingDefaultPassword = this.formData.password === defaultPassword;
+						
+						// 保存初始密码状态
+						uni.setStorageSync('isUsingDefaultPassword', isUsingDefaultPassword);
+						
 						uni.showToast({
 							title: '登录成功',
 							icon: 'success'
 						});
 						
-						// 跳转到首页
+						// 如果是使用初始密码登录，跳转到个人资料页面提醒修改密码
 						setTimeout(() => {
-							console.log('即将跳转到首页');
-							uni.switchTab({
-								url: '/pages/index/index'
-							});
+							if (isUsingDefaultPassword) {
+								console.log('检测到使用初始密码登录，跳转到个人资料页面');
+								uni.showModal({
+									title: '安全提示',
+									content: '您正在使用初始密码登录，为了账号安全，请立即修改密码。',
+									showCancel: false,
+									success: function(res) {
+										if (res.confirm) {
+											// 保存初始密码标记到本地存储
+											uni.setStorageSync('needInitPassword', 'true');
+											// 使用switchTab而非navigateTo跳转到tabBar页面
+											uni.switchTab({
+												url: '/pages/user/profile/profile'
+											});
+										}
+									}
+								});
+							} else {
+								console.log('即将跳转到首页');
+								uni.switchTab({
+									url: '/pages/index/index'
+								});
+							}
 						}, 1500);
 					} else {
 						// 登录失败

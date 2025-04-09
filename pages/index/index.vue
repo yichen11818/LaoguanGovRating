@@ -191,6 +191,9 @@
 					this.checkRoleAndLogin();
 					this.loadData();
 					
+					// 检查是否使用初始密码
+					this.checkInitialPassword();
+					
 					// 如果是评分员角色，添加欢迎日志
 					if (userInfo.role === 'rater' || userInfo.role === 2) {
 						console.log(`欢迎您，${userInfo.name || userInfo.username} 评分员`);
@@ -205,6 +208,47 @@
 			}
 		},
 		methods: {
+			// 检查用户是否使用初始密码
+			checkInitialPassword() {
+				// 检查是否有手机号
+				if (!this.userInfo.phone) return;
+				
+				// 获取密码重置状态
+				const hasResetPassword = uni.getStorageSync('hasResetPassword');
+				if (hasResetPassword === 'true') {
+					console.log('用户已重置密码，不再提示');
+					return;
+				}
+				
+				// 默认密码是手机号后6位
+				const defaultPassword = this.userInfo.phone.slice(-6);
+				
+				// 获取用户密码（登录时保存的状态）
+				const isUsingDefaultPassword = uni.getStorageSync('isUsingDefaultPassword');
+				
+				console.log('检查初始密码状态:', isUsingDefaultPassword);
+				
+				if (isUsingDefaultPassword) {
+					// 如果用户正在使用初始密码，弹窗提醒修改
+					uni.showModal({
+						title: '安全提示',
+						content: '您当前正在使用初始密码登录，为保证账号安全，请尽快修改密码。',
+						confirmText: '去修改',
+						cancelText: '以后再说',
+						success: (res) => {
+							if (res.confirm) {
+								// 保存初始密码标记到本地存储
+								uni.setStorageSync('needInitPassword', 'true');
+								// 使用switchTab而非navigateTo跳转到tabBar页面
+								uni.switchTab({
+									url: '/pages/user/profile/profile'
+								});
+							}
+						}
+					});
+				}
+			},
+			
 			checkRoleAndLogin() {
 				console.log('检查用户角色:', this.userInfo.role, typeof this.userInfo.role);
 				

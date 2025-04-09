@@ -2,9 +2,9 @@
 
 const crypto = require('crypto');
 
-// 用于加密密码的函数
+// 用于加密密码的函数 - 使用SHA256加密与原项目一致
 function encryptPassword(password) {
-  return crypto.createHash('md5').update(password).digest('hex');
+  return crypto.createHash('sha256').update(password).digest('hex');
 }
 
 // 云函数入口
@@ -57,11 +57,12 @@ exports.main = async (event, context) => {
   
   // 用于存储处理后的用户数据
   const users = [];
+  // 用于存储用户账号密码信息
+  const userCredentials = [];
   
   // 处理每行数据
   lines.forEach(line => {
     // 使用正则表达式匹配数据格式
-    // 格式：职位 + 空格 + 姓名(可能含多个空格) + 空格 + 手机号 + 可选的村庄信息
     const match = line.match(/^(\S+)\s+([\u4e00-\u9fa5\s]+?)\s+(\d{11})\s*(.*?)$/);
     
     if (match) {
@@ -84,9 +85,19 @@ exports.main = async (event, context) => {
         role: 'rater', // 统一设置为评分员角色
         position,
         village,
-        status: 1, // 默认启用状态
+        status: 'active', // 使用与原项目一致的状态值
         create_date: new Date()
       };
+      
+      // 添加用户凭据信息
+      userCredentials.push({
+        name,
+        position,
+        username,
+        plainPassword: defaultPassword, // 明文密码
+        village: village || '-',
+        encryptedPassword: encryptedPassword // 添加加密后的密码，用于调试
+      });
       
       users.push(user);
     } else {
@@ -108,6 +119,32 @@ exports.main = async (event, context) => {
     const result = await usersCollection.add(users);
     successCount = result.inserted || users.length;
     
+    // 生成账号密码Excel文件的数据结构
+    const usersAccountInfo = userCredentials.map((user, index) => {
+      return {
+        序号: (index + 1),
+        姓名: user.name,
+        职位: user.position,
+        所属村: user.village,
+        账号: user.username,
+        密码: user.plainPassword
+      };
+    });
+    
+    // 添加一条测试账号记录，用于验证
+    const testPhone = '15579961188';
+    const testPwd = testPhone.slice(-6);
+    const testEncryptedPwd = encryptPassword(testPwd);
+    
+    usersAccountInfo.push({
+      序号: users.length + 1,
+      姓名: '测试账号',
+      职位: '管理员',
+      所属村: '-',
+      账号: testPhone,
+      密码: testPwd
+    });
+    
     return {
       code: 0,
       msg: '导入成功',
@@ -115,7 +152,10 @@ exports.main = async (event, context) => {
         totalUsers: users.length,
         successCount,
         errorCount: users.length - successCount,
-        users: users.map(u => ({ name: u.name, phone: u.phone })) // 返回导入的用户列表摘要
+        // 账号密码信息表
+        userCredentials: usersAccountInfo,
+        // 登录提示
+        loginInfo: `请使用手机号作为账号，手机号后6位作为密码登录。\n示例：账号${users[0].phone}，密码${userCredentials[0].plainPassword}`
       }
     };
   } catch (error) {

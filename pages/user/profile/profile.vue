@@ -136,12 +136,40 @@
 					oldPassword: '',
 					newPassword: '',
 					confirmPassword: ''
-				}
+				},
+				isInitialPassword: false // 标记是否是初始密码
+			}
+		},
+		onLoad(options) {
+			console.log('个人资料页面加载参数:', options);
+			// 从本地存储获取初始密码标记
+			const needInitPassword = uni.getStorageSync('needInitPassword');
+			if (needInitPassword === 'true') {
+				this.isInitialPassword = true;
+				// 读取后立即清除标记
+				uni.removeStorageSync('needInitPassword');
 			}
 		},
 		onShow() {
 			console.log('=== 页面显示 - 开始检查登录状态 ===');
 			this.checkLoginStatus();
+			
+			// 处理初始密码的情况
+			if (this.isInitialPassword) {
+				// 弹窗提示修改密码
+				uni.showToast({
+					title: '请修改初始密码',
+					icon: 'none',
+					duration: 2000
+				});
+				
+				// 检查是否存在手机号，并自动填充初始密码
+				if (this.userInfo && this.userInfo.phone) {
+					const defaultPassword = this.userInfo.phone.slice(-6);
+					this.passwordForm.oldPassword = defaultPassword;
+					console.log('自动填充初始密码:', defaultPassword);
+				}
+			}
 		},
 		methods: {
 			// 检查登录状态
@@ -158,6 +186,14 @@
 					console.log('用户已登录，从本地存储获取的用户信息:', this.userInfo);
 					console.log('用户角色:', this.userInfo.role, '(' + this.getRoleName(this.userInfo.role) + ')');
 					this.loadUserInfo();
+					
+					// 检查是否使用初始密码登录，如果是则自动填充密码字段
+					const isUsingDefaultPassword = uni.getStorageSync('isUsingDefaultPassword');
+					if (isUsingDefaultPassword && this.userInfo.phone) {
+						const defaultPassword = this.userInfo.phone.slice(-6);
+						this.passwordForm.oldPassword = defaultPassword;
+						console.log('检测到使用初始密码，自动填充原密码:', defaultPassword);
+					}
 				} else {
 					this.isLoggedIn = false;
 					this.userInfo = {
@@ -328,49 +364,72 @@
 				
 				if (this.passwordForm.newPassword !== this.passwordForm.confirmPassword) {
 					uni.showToast({
-						title: '两次输入的密码不一致',
+						title: '两次输入的新密码不一致',
 						icon: 'none'
 					});
 					return;
+				}
+				
+				// 检查新密码是否与初始密码相同
+				if (this.userInfo.phone) {
+					const defaultPassword = this.userInfo.phone.slice(-6);
+					if (this.passwordForm.newPassword === defaultPassword) {
+						uni.showToast({
+							title: '新密码不能与初始密码相同',
+							icon: 'none'
+						});
+						return;
+					}
 				}
 				
 				uni.showLoading({
 					title: '修改中...'
 				});
 				
-				console.log('准备修改密码:', {
-					oldPassword: this.passwordForm.oldPassword,
-					newPassword: this.passwordForm.newPassword,
-					username: this.userInfo.username
-				});
-				
+				// 调用云函数修改密码
 				uniCloud.callFunction({
 					name: 'user',
 					data: {
 						action: 'changePassword',
 						data: {
+							username: this.userInfo.username,
 							oldPassword: this.passwordForm.oldPassword,
-							newPassword: this.passwordForm.newPassword,
-							username: this.userInfo.username // 传递用户名
+							newPassword: this.passwordForm.newPassword
 						}
 					}
 				}).then(res => {
 					uni.hideLoading();
-					console.log('修改密码结果:', res.result);
+					console.log('修改密码返回:', res.result);
 					
 					if (res.result.code === 0) {
+						// 修改成功
 						uni.showToast({
 							title: '密码修改成功',
 							icon: 'success'
 						});
 						
-						// 重置表单
+						// 记录用户已重置密码
+						uni.setStorageSync('hasResetPassword', 'true');
+						// 清除初始密码状态
+						uni.removeStorageSync('isUsingDefaultPassword');
+						
+						// 清空表单
 						this.passwordForm = {
 							oldPassword: '',
 							newPassword: '',
 							confirmPassword: ''
 						};
+						
+						// 如果是从初始密码提醒页面进入的，修改成功后返回首页
+						if (this.isInitialPassword) {
+							setTimeout(() => {
+								uni.switchTab({
+									url: '/pages/index/index'
+								});
+							}, 1500);
+						}
 					} else {
+						// 修改失败
 						uni.showToast({
 							title: res.result.msg || '密码修改失败',
 							icon: 'none'
@@ -378,9 +437,9 @@
 					}
 				}).catch(err => {
 					uni.hideLoading();
-					console.error('修改密码出错:', err);
+					console.error('修改密码请求错误:', err);
 					uni.showToast({
-						title: '密码修改失败，请检查网络',
+						title: '网络异常，请重试',
 						icon: 'none'
 					});
 				});
