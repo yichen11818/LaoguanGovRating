@@ -28,6 +28,8 @@ exports.main = async (event, context) => {
       return await getRaterStats(data, context);
     case 'getTableRatings':
       return await getTableRatings(data);
+    case 'getRatingsByTable':
+      return await getRatingsByTable(data);
     default:
       return {
         code: -1,
@@ -280,10 +282,11 @@ async function getRatingDetail(data) {
 
 // 根据考核对象获取评分
 async function getRatingBySubject(data) {
-  const { table_id, subject } = data;
+  const { tableId, subject, rater } = data;
   
   // 参数校验
-  if (!table_id || !subject) {
+  if (!tableId || !subject) {
+    console.log('缺少必要参数，tableId或subject为空', data);
     return {
       code: -1,
       msg: '缺少必要参数'
@@ -292,10 +295,19 @@ async function getRatingBySubject(data) {
   
   try {
     // 获取评分记录
-    const ratingInfo = await ratingCollection.where({
-      table_id,
-      subject
-    }).get();
+    let query = ratingCollection.where({
+      table_id: tableId,
+      subject: subject
+    });
+    
+    // 如果提供了rater参数，则加入过滤条件
+    if (rater) {
+      query = query.where({
+        rater: rater
+      });
+    }
+    
+    const ratingInfo = await query.get();
     
     if (ratingInfo.data.length === 0) {
       return {
@@ -318,6 +330,7 @@ async function getRatingBySubject(data) {
       }
     };
   } catch (e) {
+    console.error('获取评分失败:', e);
     return {
       code: -1,
       msg: '获取评分失败',
@@ -565,6 +578,54 @@ async function getTableRatings(data) {
     return {
       code: -1,
       msg: '获取评分数据失败',
+      error: e.message
+    };
+  }
+}
+
+// 获取评分表的所有评分记录（按评分人筛选）
+async function getRatingsByTable(data) {
+  const { tableId, rater } = data;
+  
+  console.log('获取评分表的所有评分记录，参数:', data);
+  
+  try {
+    if (!tableId) {
+      return {
+        code: -1,
+        msg: '缺少表格ID参数'
+      };
+    }
+    
+    // 构建查询条件
+    let query = ratingCollection.where({
+      table_id: tableId
+    });
+    
+    // 如果提供了评分人，则按评分人筛选
+    if (rater) {
+      query = query.where({
+        rater: rater
+      });
+    }
+    
+    // 获取所有评分记录
+    const ratingsResult = await query.get();
+    
+    console.log(`找到${ratingsResult.data.length}条评分记录`);
+    
+    return {
+      code: 0,
+      msg: '获取评分记录成功',
+      data: {
+        ratings: ratingsResult.data
+      }
+    };
+  } catch (e) {
+    console.error('获取评分记录失败:', e);
+    return {
+      code: -1,
+      msg: '获取评分记录失败',
       error: e.message
     };
   }

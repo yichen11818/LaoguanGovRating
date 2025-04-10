@@ -269,7 +269,8 @@
 						action: 'getRatingBySubject',
 						data: {
 							tableId: this.tableId,
-							subject: this.currentSubject.name
+							subject: this.currentSubject.name,
+							rater: userInfo.username
 						}
 					}
 				}).then(res => {
@@ -370,7 +371,7 @@
 					data: {
 						action: 'submitRating',
 						data: {
-							tableId: this.tableId,
+							table_id: this.tableId,
 							rater: userInfo.username,
 							subject: this.currentSubject.name,
 							scores: this.scores,
@@ -494,7 +495,7 @@
 							action: 'submitRating',
 							data: {
 								table_id: this.tableId,
-								rater: uni.getStorageSync('username'),
+								rater: uni.getStorageSync('userInfo').username,
 								subject: subject.name,
 								scores: scores
 							}
