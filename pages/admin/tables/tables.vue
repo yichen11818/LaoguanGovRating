@@ -186,12 +186,15 @@
 		</uni-popup>
 		
 		<!-- 考核对象选择弹窗 -->
-		<uni-popup ref="subjectSelectorPopup" type="center">
+		<uni-popup ref="subjectSelectorPopup" type="center" :mask-click="false">
 			<view class="popup-content subject-selector-popup">
-				<view class="popup-title">选择考核对象</view>
+				<view class="popup-title">
+					<text>选择考核对象</text>
+					<text class="close-btn" @click="hideSubjectSelector">×</text>
+				</view>
 				
 				<view class="search-box">
-					<input v-model="subjectSearchKey" class="search-input" placeholder="搜索考核对象" />
+					<input v-model="subjectSearchKey" class="search-input" placeholder="搜索考核对象" confirm-type="search" @confirm="filterSubjects" focus />
 				</view>
 				
 				<view class="subject-list-container">
@@ -199,7 +202,7 @@
 						<view class="subject-checkbox">
 							<checkbox :checked="isSubjectSelected(subject)" @click="toggleSubjectSelection(subject)" />
 						</view>
-						<view class="subject-info">
+						<view class="subject-info" @click="toggleSubjectSelection(subject)">
 							<text class="subject-name">{{subject.name}}</text>
 							<text class="subject-department" v-if="subject.department">{{subject.department}}</text>
 						</view>
@@ -210,9 +213,9 @@
 					</view>
 				</view>
 				
-				<view class="popup-btns">
+				<view class="popup-btns fixed-bottom">
 					<button class="cancel-btn" size="mini" @click="hideSubjectSelector">取消</button>
-					<button class="confirm-btn" size="mini" @click="confirmSubjectSelection">确定</button>
+					<button class="confirm-btn" size="mini" @click="confirmSubjectSelection">确定 (已选 {{selectedSubjectIds.length}} 项)</button>
 				</view>
 			</view>
 		</uni-popup>
@@ -228,7 +231,9 @@
 					{ id: 0, name: '全部类型' },
 					{ id: 1, name: '(办公室)一般干部评分' },
 					{ id: 2, name: '(驻村)干部评分' },
-					{ id: 3, name: '班子评分' }
+					{ id: 3, name: '班子评分-中层干部考核评分表（分别评分)' },
+					{ id: 4, name: '班子评分-驻村干部考核' },
+					{ id: 5, name: '班子评分-分管线上一般干部考核' }
 				],
 				tables: [],
 				page: 1,
@@ -299,7 +304,9 @@
 				const typeMap = {
 					1: '(办公室)一般干部评分',
 					2: '(驻村)干部评分',
-					3: '班子评分'
+					3: '班子评分-中层干部考核评分表（分别评分)',
+					4: '班子评分-驻村干部考核',
+					5: '班子评分-分管线上一般干部考核'
 				};
 				return typeMap[type] || '未知类型';
 			},
@@ -771,13 +778,25 @@
 			// 显示考核对象选择器
 			showSubjectSelector() {
 				this.selectedSubjectIds = this.formData.selectedSubjects.map(s => s._id);
+				this.subjectSearchKey = ''; // 清空搜索关键词
 				this.$refs.subjectSelectorPopup.open();
+				
+				// 使用setTimeout确保弹窗显示后再处理
+				setTimeout(() => {
+					// 这里可以添加额外的UI调整逻辑
+					// 适应不同设备的屏幕大小等
+				}, 300);
 			},
 			
 			// 显示编辑时的考核对象选择器
 			showEditSubjectSelector() {
 				this.selectedSubjectIds = this.editData.selectedSubjects.map(s => s._id);
+				this.subjectSearchKey = ''; // 清空搜索关键词
 				this.$refs.subjectSelectorPopup.open();
+				
+				setTimeout(() => {
+					// 同上
+				}, 300);
 			},
 			
 			// 隐藏考核对象选择器
@@ -826,6 +845,13 @@
 			// 移除已选考核对象（编辑表单）
 			removeEditSubject(index) {
 				this.editData.selectedSubjects.splice(index, 1);
+			},
+			
+			// 添加一个新的过滤方法
+			filterSubjects() {
+				// 这里可以添加额外的过滤逻辑，比如延迟处理等
+				// 现在只是为了适配UI
+				console.log('搜索关键词:', this.subjectSearchKey);
 			}
 		}
 	}
@@ -1285,39 +1311,73 @@ page {
 
 .subject-selector-popup {
 	min-height: 750rpx;
-	max-height: 900rpx;
+	max-height: 90vh !important; /* 最大高度为视口高度的90% */
 	width: 650rpx;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	padding-bottom: 120rpx; /* 为底部按钮留出空间 */
+}
+
+.popup-title {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	position: relative;
+}
+
+.close-btn {
+	font-size: 40rpx;
+	color: #999;
+	position: absolute;
+	right: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 60rpx;
+	height: 60rpx;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .search-box {
-	margin-bottom: 20rpx;
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	background-color: #fff;
+	padding: 20rpx 0;
 }
 
 .search-input {
 	background-color: #f5f5f5;
-	padding: 16rpx;
-	border-radius: 8rpx;
+	padding: 16rpx 30rpx;
+	border-radius: 40rpx;
+	font-size: 28rpx;
 }
 
 .subject-list-container {
-	max-height: 500rpx;
+	flex: 1;
 	overflow-y: auto;
+	-webkit-overflow-scrolling: touch; /* 增强iOS滚动体验 */
+	margin: 20rpx 0;
+	padding-bottom: 20rpx;
+	max-height: 60vh; /* 最大高度为视口高度的60% */
 }
 
 .subject-item {
 	display: flex;
-	padding: 20rpx 0;
+	padding: 24rpx 0;
 	border-bottom: 1px solid #f5f5f5;
+	align-items: center;
 }
 
 .subject-checkbox {
 	margin-right: 20rpx;
-	display: flex;
-	align-items: center;
 }
 
 .subject-info {
 	flex: 1;
+	padding: 10rpx 0;
 }
 
 .subject-name {
@@ -1329,5 +1389,42 @@ page {
 .subject-department {
 	font-size: 26rpx;
 	color: #999;
+}
+
+.fixed-bottom {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	background-color: #fff;
+	padding: 20rpx 30rpx;
+	border-top: 1px solid #eee;
+	display: flex;
+	justify-content: space-between;
+}
+
+.popup-btns {
+	padding-top: 20rpx;
+}
+
+.cancel-btn, 
+.confirm-btn {
+	margin: 0;
+	padding: 0 40rpx;
+	height: 80rpx;
+	line-height: 80rpx;
+	border-radius: 40rpx;
+}
+
+.confirm-btn {
+	background: linear-gradient(to right, #07c160, #10ad7a);
+	color: #fff;
+	flex: 2;
+	margin-left: 20rpx;
+}
+
+.cancel-btn {
+	flex: 1;
+	background-color: #f5f5f5;
 }
 </style> 
