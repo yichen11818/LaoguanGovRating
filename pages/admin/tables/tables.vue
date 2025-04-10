@@ -83,12 +83,10 @@
 				</view>
 				<view class="form-item">
 					<text class="form-label">评分人</text>
-					<picker @change="handleRaterChange" :value="currentRaterIndex" :range="raters" range-key="name">
-						<view class="form-picker">
-							<text>{{raters[currentRaterIndex].name || '请选择评分人'}}</text>
-							<text class="picker-arrow">▼</text>
-						</view>
-					</picker>
+					<view class="picker-box" @click="showRaterSelector">
+						<text class="picker-text">{{formData.rater ? (raters.find(r => r.username === formData.rater)?.name || formData.rater) : '请选择评分人'}}</text>
+						<text class="picker-arrow">▼</text>
+					</view>
 				</view>
 				
 				<!-- 新增考核对象选择部分 -->
@@ -137,6 +135,15 @@
 					<input v-model="editData.category" class="form-input" placeholder="请输入分类，如便民服务、党建办等" />
 				</view>
 				
+				<!-- 更新评分人选择部分 -->
+				<view class="form-item">
+					<text class="form-label">评分人</text>
+					<view class="picker-box" @click="showEditRaterSelector">
+						<text class="picker-text">{{editData.rater ? (raters.find(r => r.username === editData.rater)?.name || editData.rater) : '请选择评分人'}}</text>
+						<text class="picker-arrow">▼</text>
+					</view>
+				</view>
+				
 				<!-- 新增考核对象选择部分 -->
 				<view class="form-item">
 					<text class="form-label">考核对象</text>
@@ -171,12 +178,10 @@
 				</view>
 				<view class="form-item">
 					<text class="form-label">新评分人</text>
-					<picker @change="handleNewRaterChange" :value="changeRaterData.newRaterIndex" :range="raters" range-key="name">
-						<view class="form-picker">
-							<text>{{raters[changeRaterData.newRaterIndex].name || '请选择新评分人'}}</text>
-							<text class="picker-arrow">▼</text>
-						</view>
-					</picker>
+					<view class="picker-box" @click="showChangeRaterSelector">
+						<text class="picker-text">{{changeRaterData.newRater ? (raters.find(r => r.username === changeRaterData.newRater)?.name || changeRaterData.newRater) : '请选择新评分人'}}</text>
+						<text class="picker-arrow">▼</text>
+					</view>
 				</view>
 				<view class="popup-btns">
 					<button class="cancel-btn" size="mini" @click="hideChangeRaterPopup">取消</button>
@@ -193,18 +198,42 @@
 					<text class="close-btn" @click="hideSubjectSelector">×</text>
 				</view>
 				
+				<!-- 添加选项卡 -->
+				<view class="tabs-container">
+					<view 
+						v-for="(tab, index) in ['全部']" 
+						:key="index"
+						class="tab-item" 
+						:class="{'active': currentSubjectTab === index}"
+						@click="switchSubjectTab(index)">
+						<text>{{tab}}</text>
+					</view>
+				</view>
+				
+				<!-- 添加选项卡 -->
 				<view class="search-box">
-					<input v-model="subjectSearchKey" class="search-input" placeholder="搜索考核对象" confirm-type="search" @confirm="filterSubjects" focus />
+					<input v-model="subjectSearchKey" class="search-input" placeholder="搜索考核对象" @input="filterSubjects" focus />
+				</view>
+				
+				<!-- 批量选择操作 -->
+				<view class="batch-actions">
+					<text class="batch-action-hint">点击选择/取消</text>
+					<view>
+						<text class="batch-action-btn" @click="selectAllSubjects">全选</text>
+						<text class="batch-action-btn" @click="clearSelectedSubjects">清除</text>
+					</view>
 				</view>
 				
 				<view class="subject-list-container">
-					<view class="subject-item" v-for="(subject, index) in filteredSubjects" :key="index">
-						<view class="subject-checkbox">
-							<checkbox :checked="isSubjectSelected(subject)" @click="toggleSubjectSelection(subject)" />
-						</view>
-						<view class="subject-info" @click="toggleSubjectSelection(subject)">
+					<view class="subject-item" v-for="(subject, index) in filteredSubjects" 
+						  :key="index" 
+						  @click="toggleSubjectSelection(subject)"
+						  :class="{'subject-item-selected': isSubjectSelected(subject)}">
+						<view class="subject-info">
 							<text class="subject-name">{{subject.name}}</text>
 							<text class="subject-department" v-if="subject.department">{{subject.department}}</text>
+							<text class="subject-position" v-if="subject.position">{{subject.position}}</text>
+							<text class="selected-tag" v-if="isSubjectSelected(subject)">已选</text>
 						</view>
 					</view>
 					
@@ -214,8 +243,47 @@
 				</view>
 				
 				<view class="popup-btns fixed-bottom">
+					<view class="selected-summary" v-if="selectedSubjectIds.length > 0">
+						<view class="selected-count">已选择 {{selectedSubjectIds.length}} 项</view>
+						<view class="selected-preview" v-if="selectedSubjectIds.length <= 3">
+							<text v-for="(id, index) in selectedSubjectIds" :key="id" class="preview-item">
+								{{getSubjectNameById(id)}}{{index < selectedSubjectIds.length - 1 ? '，' : ''}}
+							</text>
+						</view>
+					</view>
 					<button class="cancel-btn" size="mini" @click="hideSubjectSelector">取消</button>
-					<button class="confirm-btn" size="mini" @click="confirmSubjectSelection">确定 (已选 {{selectedSubjectIds.length}} 项)</button>
+					<button class="confirm-btn" size="mini" @click="confirmSubjectSelection">确定</button>
+				</view>
+			</view>
+		</uni-popup>
+		
+		<!-- 评分人选择弹窗 -->
+		<uni-popup ref="raterSelectorPopup" type="center" :mask-click="false">
+			<view class="popup-content subject-selector-popup">
+				<view class="popup-title">
+					<text>选择评分人</text>
+					<text class="close-btn" @click="hideRaterSelector">×</text>
+				</view>
+				
+				<view class="search-box">
+					<input v-model="raterSearchKey" class="search-input" placeholder="搜索评分人" confirm-type="search" @confirm="filterRaters" focus />
+				</view>
+				
+				<view class="subject-list-container">
+					<view class="subject-item" v-for="(rater, index) in filteredRaters" :key="index" @click="selectRater(rater)">
+						<view class="subject-info">
+							<text class="subject-name">{{rater.name}}</text>
+							<text class="subject-department" v-if="rater.username">账号: {{rater.username}}</text>
+						</view>
+					</view>
+					
+					<view class="no-data" v-if="filteredRaters.length === 0">
+						<text class="no-data-text">未找到匹配的评分人</text>
+					</view>
+				</view>
+				
+				<view class="popup-btns fixed-bottom">
+					<button class="cancel-btn" size="mini" @click="hideRaterSelector">取消</button>
 				</view>
 			</view>
 		</uni-popup>
@@ -254,6 +322,7 @@
 				// 评分人列表
 				raters: [{ username: '', name: '请选择评分人' }],
 				currentRaterIndex: 0,
+				raterSearchKey: '', // 评分人搜索关键词
 				
 				// 编辑表单数据
 				editData: {
@@ -261,21 +330,25 @@
 					name: '',
 					typeIndex: 1,
 					category: '',
-					selectedSubjects: []
+					selectedSubjects: [],
+					rater: ''
 				},
 				
 				// 更换评分人数据
 				changeRaterData: {
 					tableId: '',
 					currentRater: '',
-					newRaterIndex: 0
+					newRaterIndex: 0,
+					newRater: ''
 				},
 				
 				// 新增数据
 				allSubjects: [], // 所有考核对象
 				selectedSubjectIds: [], // 临时存储选中的考核对象ID
 				subjectSearchKey: '', // 考核对象搜索关键词
-				editingTableId: '' // 正在编辑的表ID
+				editingTableId: '', // 正在编辑的表ID
+				selectingMode: '', // 评分人选择器的模式: 'add'新增表单, 'edit'编辑表单
+				currentSubjectTab: 0 // 当前选中的选项卡索引
 			}
 		},
 		computed: {
@@ -290,6 +363,23 @@
 					return subject.name.toLowerCase().includes(key) || 
 						   (subject.department && subject.department.toLowerCase().includes(key)) ||
 						   (subject.position && subject.position.toLowerCase().includes(key));
+				});
+			},
+			
+			// 过滤后的评分人列表
+			filteredRaters() {
+				if (!this.raterSearchKey) {
+					// 跳过第一个"请选择评分人"的选项
+					return this.raters.slice(1);
+				}
+				
+				const key = this.raterSearchKey.toLowerCase();
+				return this.raters.filter(rater => {
+					// 排除第一个空选项，并进行关键词过滤
+					return rater.username && (
+						rater.name.toLowerCase().includes(key) || 
+						rater.username.toLowerCase().includes(key)
+					);
 				});
 			}
 		},
@@ -511,7 +601,8 @@
 					name: table.name,
 					typeIndex: table.type,
 					category: table.category || '',
-					selectedSubjects: []
+					selectedSubjects: [],
+					rater: table.rater
 				};
 				
 				// 加载此表关联的考核对象
@@ -563,6 +654,15 @@
 					return;
 				}
 				
+				// 检查评分人是否已选择
+				if (!this.editData.rater) {
+					uni.showToast({
+						title: '请选择评分人',
+						icon: 'none'
+					});
+					return;
+				}
+				
 				uni.showLoading({
 					title: '提交中...'
 				});
@@ -579,7 +679,8 @@
 								name: this.editData.name,
 								type: type,
 								category: this.editData.category,
-								selectedSubjects: this.editData.selectedSubjects
+								selectedSubjects: this.editData.selectedSubjects,
+								rater: this.editData.rater
 							}
 						}
 					}
@@ -633,7 +734,7 @@
 			
 			// 提交更换评分人
 			submitChangeRater() {
-				if (this.changeRaterData.newRaterIndex === 0) {
+				if (!this.changeRaterData.newRater) {
 					uni.showToast({
 						title: '请选择新评分人',
 						icon: 'none'
@@ -641,7 +742,7 @@
 					return;
 				}
 				
-				const newRater = this.raters[this.changeRaterData.newRaterIndex].username;
+				const newRater = this.changeRaterData.newRater;
 				
 				if (newRater === this.changeRaterData.currentRater) {
 					uni.showToast({
@@ -665,27 +766,16 @@
 						}
 					}
 				}).then(res => {
+					this.hideChangeRaterPopup();
+					this.loadTables();
 					uni.hideLoading();
-					
-					if (res.result.code === 0) {
-						uni.showToast({
-							title: '更换成功',
-							icon: 'success'
-						});
-						
-						this.hideChangeRaterPopup();
-						this.loadTables();
-					} else {
-						uni.showToast({
-							title: res.result.msg || '更换失败',
-							icon: 'none'
-						});
-					}
+					uni.showToast({
+						title: '评分人更换成功'
+					});
 				}).catch(err => {
 					uni.hideLoading();
-					console.error(err);
 					uni.showToast({
-						title: '更换失败，请检查网络',
+						title: '操作失败: ' + err.message,
 						icon: 'none'
 					});
 				});
@@ -777,26 +867,36 @@
 			
 			// 显示考核对象选择器
 			showSubjectSelector() {
+				// 确保selectedSubjectIds包含当前已选的考核对象
 				this.selectedSubjectIds = this.formData.selectedSubjects.map(s => s._id);
 				this.subjectSearchKey = ''; // 清空搜索关键词
 				this.$refs.subjectSelectorPopup.open();
 				
 				// 使用setTimeout确保弹窗显示后再处理
 				setTimeout(() => {
-					// 这里可以添加额外的UI调整逻辑
-					// 适应不同设备的屏幕大小等
+					// 高亮显示已选项
+					this.scrollToSelected();
 				}, 300);
 			},
 			
 			// 显示编辑时的考核对象选择器
 			showEditSubjectSelector() {
+				// 确保selectedSubjectIds包含当前已选的考核对象
 				this.selectedSubjectIds = this.editData.selectedSubjects.map(s => s._id);
 				this.subjectSearchKey = ''; // 清空搜索关键词
 				this.$refs.subjectSelectorPopup.open();
 				
 				setTimeout(() => {
-					// 同上
+					// 高亮显示已选项
+					this.scrollToSelected();
 				}, 300);
+			},
+			
+			// 添加新方法：滚动到第一个选中的考核对象
+			scrollToSelected() {
+				// 这里可以添加滚动到已选项的逻辑
+				// 由于uni-app限制，可能需要使用DOM操作或特定API
+				// 此处仅为占位，实际实现可能需要根据平台调整
 			},
 			
 			// 隐藏考核对象选择器
@@ -818,6 +918,9 @@
 				} else {
 					this.selectedSubjectIds.push(subject._id);
 				}
+				
+				// 不自动关闭弹窗，保留多选功能
+				// 保留选择状态显示，通过added CSS selected-tag来显示
 			},
 			
 			// 确认考核对象选择
@@ -849,9 +952,113 @@
 			
 			// 添加一个新的过滤方法
 			filterSubjects() {
-				// 这里可以添加额外的过滤逻辑，比如延迟处理等
-				// 现在只是为了适配UI
-				console.log('搜索关键词:', this.subjectSearchKey);
+				// 实时搜索功能，无需额外处理，由计算属性filteredSubjects自动完成
+				console.log('正在搜索:', this.subjectSearchKey);
+			},
+			
+			// 显示评分人选择器弹窗
+			showRaterSelector() {
+				this.selectingMode = 'add'; // 设置为新增模式
+				this.raterSearchKey = ''; // 清空搜索关键词
+				this.$refs.raterSelectorPopup.open();
+				
+				setTimeout(() => {
+					// 确保搜索框获得焦点
+				}, 300);
+			},
+			
+			// 显示编辑时的评分人选择器
+			showEditRaterSelector() {
+				this.selectingMode = 'edit'; // 设置为编辑模式
+				this.raterSearchKey = ''; // 清空搜索关键词
+				this.$refs.raterSelectorPopup.open();
+				
+				setTimeout(() => {
+					// 确保搜索框获得焦点
+				}, 300);
+			},
+			
+			// 隐藏评分人选择器
+			hideRaterSelector() {
+				this.$refs.raterSelectorPopup.close();
+				this.raterSearchKey = '';
+			},
+			
+			// 选择评分人
+			selectRater(rater) {
+				if (this.selectingMode === 'edit') {
+					// 编辑表格时选择评分人
+					this.editData.rater = rater.username;
+					this.editData.raterName = rater.name;
+				} else if (this.selectingMode === 'add') {
+					// 新增表格时选择评分人
+					this.formData.rater = rater.username;
+					this.formData.raterName = rater.name;
+				} else if (this.selectingMode === 'change') {
+					// 更换评分人时选择
+					this.changeRaterData.newRater = rater.username;
+					this.changeRaterData.newRaterName = rater.name;
+				}
+				
+				// 关闭选择器弹窗
+				this.$refs.raterSelectorPopup.close();
+			},
+			
+			// 过滤评分人
+			filterRaters() {
+				// 用于处理搜索确认事件
+				console.log('搜索评分人关键词:', this.raterSearchKey);
+			},
+			
+			// 显示更换评分人时的评分人选择器
+			showChangeRaterSelector() {
+				this.selectingMode = 'change'; // 设置为更换评分人模式
+				this.raterSearchKey = ''; // 清空搜索关键词
+				this.$refs.raterSelectorPopup.open();
+				
+				setTimeout(() => {
+					// 确保搜索框获得焦点
+					const inputElement = document.querySelector('.rater-search-input');
+					if (inputElement) {
+						inputElement.focus();
+					}
+				}, 300);
+			},
+			
+			// 全选当前过滤后的考核对象
+			selectAllSubjects() {
+				// 将当前过滤结果中的所有考核对象ID添加到选中列表
+				this.filteredSubjects.forEach(subject => {
+					if (!this.selectedSubjectIds.includes(subject._id)) {
+						this.selectedSubjectIds.push(subject._id);
+					}
+				});
+				
+				uni.showToast({
+					title: '已全选当前列表中的考核对象',
+					icon: 'none'
+				});
+			},
+			
+			// 清除所有已选考核对象
+			clearSelectedSubjects() {
+				this.selectedSubjectIds = [];
+				
+				uni.showToast({
+					title: '已清除所有选择',
+					icon: 'none'
+				});
+			},
+			
+			// 根据ID获取考核对象名称
+			getSubjectNameById(id) {
+				const subject = this.allSubjects.find(s => s._id === id);
+				return subject ? subject.name : '';
+			},
+			
+			// 切换选项卡
+			switchSubjectTab(index) {
+				this.currentSubjectTab = index;
 			}
 		}
 	}
@@ -1238,21 +1445,11 @@ page {
 
 .cancel-btn,
 .confirm-btn {
-	width: 45%;
-	border-radius: var(--btn-radius);
-	font-size: 28rpx;
-	padding: 16rpx 0;
-	transition: all 0.2s;
-}
-
-.cancel-btn {
-	background-color: #f5f5f5;
-	color: var(--text-regular);
-	border: 1rpx solid #ebebeb;
-}
-
-.cancel-btn:active {
-	background-color: #ebebeb;
+	margin: 0;
+	padding: 0 40rpx;
+	height: 80rpx;
+	line-height: 80rpx;
+	border-radius: 40rpx;
 }
 
 .confirm-btn {
@@ -1262,10 +1459,53 @@ page {
 	box-shadow: 0 6rpx 12rpx rgba(7, 193, 96, 0.2);
 }
 
-.confirm-btn:active {
-	opacity: 0.9;
-	transform: translateY(2rpx);
-	box-shadow: 0 2rpx 6rpx rgba(7, 193, 96, 0.1);
+.cancel-btn {
+	background-color: #f5f5f5;
+	color: var(--text-regular);
+	border: 1rpx solid #ebebeb;
+}
+
+/* 专门针对弹窗底部按钮的样式 */
+.popup-btns.fixed-bottom {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 0;
+	padding: 20rpx 30rpx;
+	border-top: 1px solid #eee;
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	background-color: #fff;
+}
+
+.popup-btns.fixed-bottom .cancel-btn, 
+.popup-btns.fixed-bottom .confirm-btn {
+	width: auto;
+	min-width: 180rpx;
+	margin: 0 0 0 20rpx;
+	flex: none;
+	text-align: center;
+}
+
+/* 修改搜索框样式确保文字可见 */
+.search-box {
+	position: sticky;
+	top: 0;
+	z-index: 10;
+	background-color: #fff;
+	padding: 20rpx 20rpx;
+}
+
+.search-input {
+	background-color: #f5f5f5;
+	padding: 16rpx 30rpx;
+	border-radius: 40rpx;
+	font-size: 28rpx;
+	color: #333;
+	width: 100%;
+	box-sizing: border-box;
+	border: 1px solid #eeeeee;
 }
 
 /* 新增考核对象选择部分 */
@@ -1353,6 +1593,7 @@ page {
 	padding: 16rpx 30rpx;
 	border-radius: 40rpx;
 	font-size: 28rpx;
+	color: #333;
 }
 
 .subject-list-container {
@@ -1366,18 +1607,84 @@ page {
 
 .subject-item {
 	display: flex;
-	padding: 24rpx 0;
+	padding: 24rpx 20rpx;
 	border-bottom: 1px solid #f5f5f5;
+	align-items: center;
+	transition: all 0.2s;
+}
+
+.subject-item:active {
+	background-color: #f9f9f9;
+}
+
+.subject-item-selected {
+	background-color: var(--primary-light);
+	border-left: 6rpx solid var(--primary-color);
+	padding-left: 14rpx;
+}
+
+.selected-tag {
+	position: absolute;
+	right: 20rpx;
+	top: 50%;
+	transform: translateY(-50%);
+	background-color: var(--primary-color);
+	color: white;
+	font-size: 24rpx;
+	padding: 4rpx 16rpx;
+	border-radius: 20rpx;
+}
+
+.fixed-bottom {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	background-color: #fff;
+	padding: 20rpx 30rpx;
+	border-top: 1px solid #eee;
+	display: flex;
+	justify-content: flex-end;
 	align-items: center;
 }
 
-.subject-checkbox {
-	margin-right: 20rpx;
+.popup-btns.fixed-bottom .cancel-btn,
+.popup-btns.fixed-bottom .confirm-btn {
+	width: auto;
+	min-width: 180rpx;
+	margin: 0 0 0 20rpx;
+}
+
+.popup-btns.fixed-bottom .cancel-btn {
+	flex: none;
+}
+
+.popup-btns.fixed-bottom .confirm-btn {
+	flex: none;
+}
+
+.batch-actions {
+	display: flex;
+	justify-content: space-between; /* 分散对齐，左右放置 */
+	padding: 10rpx 20rpx;
+	border-bottom: 1px solid #f0f0f0;
+	background-color: #fff;
+}
+
+.batch-action-btn {
+	font-size: 26rpx;
+	color: var(--primary-color);
+	padding: 6rpx 20rpx;
+	margin-left: 20rpx;
+	background-color: var(--primary-light);
+	border-radius: 30rpx;
+	text-align: center;
 }
 
 .subject-info {
 	flex: 1;
 	padding: 10rpx 0;
+	position: relative;
 }
 
 .subject-name {
@@ -1391,40 +1698,95 @@ page {
 	color: #999;
 }
 
-.fixed-bottom {
-	position: absolute;
-	bottom: 0;
-	left: 0;
-	right: 0;
-	background-color: #fff;
-	padding: 20rpx 30rpx;
-	border-top: 1px solid #eee;
-	display: flex;
-	justify-content: space-between;
-}
-
-.popup-btns {
-	padding-top: 20rpx;
-}
-
-.cancel-btn, 
-.confirm-btn {
-	margin: 0;
-	padding: 0 40rpx;
-	height: 80rpx;
-	line-height: 80rpx;
-	border-radius: 40rpx;
-}
-
-.confirm-btn {
-	background: linear-gradient(to right, #07c160, #10ad7a);
-	color: #fff;
-	flex: 2;
+.subject-position {
+	font-size: 26rpx;
+	color: #999;
 	margin-left: 20rpx;
 }
 
-.cancel-btn {
-	flex: 1;
-	background-color: #f5f5f5;
+/* 已选预览样式 */
+.selected-summary {
+	flex: 2;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	padding-right: 20rpx;
+}
+
+.selected-count {
+	font-size: 24rpx;
+	color: var(--text-regular);
+	margin-bottom: 6rpx;
+}
+
+.selected-preview {
+	font-size: 24rpx;
+	color: var(--primary-color);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+}
+
+.preview-item {
+	display: inline;
+}
+
+.cancel-btn:active {
+	background-color: #ebebeb;
+}
+
+.confirm-btn:active {
+	opacity: 0.9;
+	transform: translateY(2rpx);
+	box-shadow: 0 2rpx 6rpx rgba(7, 193, 96, 0.1);
+}
+
+/* 修改批量操作按钮 */
+.batch-actions {
+	display: flex;
+	justify-content: space-between; /* 分散对齐，左右放置 */
+	padding: 10rpx 20rpx;
+	border-bottom: 1px solid #f0f0f0;
+	background-color: #fff;
+}
+
+/* 添加选项卡样式 */
+.tabs-container {
+	display: flex;
+	border-bottom: 1px solid #f0f0f0;
+	background-color: #fff;
+	padding: 0 20rpx;
+}
+
+.tab-item {
+	padding: 20rpx 30rpx;
+	font-size: 28rpx;
+	color: var(--text-regular);
+	position: relative;
+	text-align: center;
+}
+
+.tab-item.active {
+	color: var(--primary-color);
+	font-weight: bold;
+}
+
+.tab-item.active::after {
+	content: '';
+	position: absolute;
+	bottom: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 40rpx;
+	height: 4rpx;
+	background-color: var(--primary-color);
+	border-radius: 2rpx;
+}
+
+/* 添加提示和样式 */
+.batch-action-hint {
+	font-size: 24rpx;
+	color: var(--text-secondary);
 }
 </style> 
