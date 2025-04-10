@@ -42,11 +42,20 @@ exports.main = async (event, context) => {
 async function submitRating(data) {
   const { table_id, rater, subject, scores, comment = '' } = data;
   
-  // 参数校验
-  if (!table_id || !rater || !subject || !scores || !Array.isArray(scores)) {
+  // 增强的参数校验
+  const missingParams = [];
+  if (!table_id) missingParams.push('table_id');
+  if (!rater) missingParams.push('rater');
+  if (!subject) missingParams.push('subject');
+  if (!scores) missingParams.push('scores');
+  else if (!Array.isArray(scores)) missingParams.push('scores (非数组格式)');
+  
+  if (missingParams.length > 0) {
+    console.error('提交评分缺少必要参数:', missingParams, '原始数据:', data);
     return {
       code: -1,
-      msg: '缺少必要参数'
+      msg: `缺少必要参数: ${missingParams.join(', ')}`,
+      missing: missingParams
     };
   }
   
@@ -123,9 +132,10 @@ async function submitRating(data) {
       };
     }
   } catch (e) {
+    console.error('提交评分失败:', e);
     return {
       code: -1,
-      msg: '提交评分失败',
+      msg: `提交评分失败: ${e.message}`,
       error: e.message
     };
   }
@@ -135,11 +145,18 @@ async function submitRating(data) {
 async function updateRating(data) {
   const { ratingId, scores, comment } = data;
   
-  // 参数校验
-  if (!ratingId || !scores || !Array.isArray(scores)) {
+  // 增强的参数校验
+  const missingParams = [];
+  if (!ratingId) missingParams.push('ratingId');
+  if (!scores) missingParams.push('scores');
+  else if (!Array.isArray(scores)) missingParams.push('scores (非数组格式)');
+  
+  if (missingParams.length > 0) {
+    console.error('更新评分缺少必要参数:', missingParams, '原始数据:', data);
     return {
       code: -1,
-      msg: '缺少必要参数'
+      msg: `缺少必要参数: ${missingParams.join(', ')}`,
+      missing: missingParams
     };
   }
   
@@ -163,9 +180,10 @@ async function updateRating(data) {
       msg: '更新评分成功'
     };
   } catch (e) {
+    console.error('更新评分失败:', e, '原始数据:', data);
     return {
       code: -1,
-      msg: '更新评分失败',
+      msg: `更新评分失败: ${e.message}`,
       error: e.message
     };
   }
@@ -284,12 +302,17 @@ async function getRatingDetail(data) {
 async function getRatingBySubject(data) {
   const { tableId, subject, rater } = data;
   
-  // 参数校验
-  if (!tableId || !subject) {
-    console.log('缺少必要参数，tableId或subject为空', data);
+  // 增强的参数校验
+  const missingParams = [];
+  if (!tableId) missingParams.push('tableId');
+  if (!subject) missingParams.push('subject');
+  
+  if (missingParams.length > 0) {
+    console.error('获取评分记录缺少必要参数:', missingParams, '原始数据:', data);
     return {
       code: -1,
-      msg: '缺少必要参数'
+      msg: `缺少必要参数: ${missingParams.join(', ')}`,
+      missing: missingParams
     };
   }
   
@@ -333,7 +356,7 @@ async function getRatingBySubject(data) {
     console.error('获取评分失败:', e);
     return {
       code: -1,
-      msg: '获取评分失败',
+      msg: `获取评分失败: ${e.message}`,
       error: e.message
     };
   }
@@ -591,9 +614,11 @@ async function getRatingsByTable(data) {
   
   try {
     if (!tableId) {
+      console.error('获取评分表记录缺少tableId参数:', data);
       return {
         code: -1,
-        msg: '缺少表格ID参数'
+        msg: '缺少必要参数: tableId',
+        missing: ['tableId']
       };
     }
     
@@ -622,10 +647,10 @@ async function getRatingsByTable(data) {
       }
     };
   } catch (e) {
-    console.error('获取评分记录失败:', e);
+    console.error('获取评分记录失败:', e, '原始参数:', data);
     return {
       code: -1,
-      msg: '获取评分记录失败',
+      msg: `获取评分记录失败: ${e.message}`,
       error: e.message
     };
   }

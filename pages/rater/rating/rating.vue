@@ -161,6 +161,67 @@
 			}
 		},
 		methods: {
+			// 获取本地存储的用户信息
+			getUserInfo() {
+				let userInfo = uni.getStorageSync('userInfo');
+				console.log('获取本地用户信息(原始):', userInfo);
+				
+				if (typeof userInfo === 'string') {
+					try {
+						userInfo = JSON.parse(userInfo);
+						console.log('解析后的用户信息:', userInfo);
+					} catch (e) {
+						console.error('解析用户信息失败:', e);
+						userInfo = {};
+					}
+				} else if (!userInfo) {
+					userInfo = {};
+				}
+				
+				return userInfo;
+			},
+			
+			// 检查用户信息
+			checkUserInfo() {
+				let userInfo = this.getUserInfo();
+				console.log('当前用户信息检查:', userInfo);
+				
+				if (!userInfo || Object.keys(userInfo).length === 0) {
+					console.error('用户信息完全不存在!');
+					uni.showToast({
+						title: '用户信息不存在，请重新登录',
+						icon: 'none',
+						duration: 2000
+					});
+					// 延迟跳转到登录页
+					setTimeout(() => {
+						uni.navigateTo({
+							url: '/pages/login/login'
+						});
+					}, 2000);
+					return false;
+				}
+				
+				if (!userInfo.username) {
+					console.error('用户名不存在! userInfo类型:', typeof userInfo, 'userInfo:', JSON.stringify(userInfo));
+					uni.showToast({
+						title: '用户登录状态已失效，请重新登录',
+						icon: 'none',
+						duration: 2000
+					});
+					// 延迟跳转到登录页
+					setTimeout(() => {
+						uni.navigateTo({
+							url: '/pages/login/login'
+						});
+					}, 2000);
+					return false;
+				}
+				
+				console.log('用户信息验证通过:', userInfo.username);
+				return userInfo;
+			},
+			
 			// 获取评分表类型名称
 			getTableTypeName(type) {
 				const typeMap = {
@@ -176,6 +237,12 @@
 			// 加载评分表详情
 			loadTableDetail() {
 				console.log('开始加载评分表详情, tableId:', this.tableId);
+				
+				// 检查用户信息
+				if (!this.checkUserInfo()) {
+					return;
+				}
+				
 				uni.showLoading({
 					title: '加载中...'
 				});
@@ -229,7 +296,7 @@
 			
 			// 初始化评分项
 			initScores() {
-				console.log('初始化评分项');
+				console.log('初始化评分项 - 考核对象:', this.currentSubject.name);
 				if (this.table.items && this.table.items.length > 0) {
 					this.scores = this.table.items.map(item => {
 						return {
@@ -239,7 +306,7 @@
 							maxScore: item.maxScore
 						};
 					});
-					console.log('初始化后的评分项:', this.scores);
+					console.log('初始化后的评分项(已重置为0分):', this.scores);
 				}
 			},
 			
@@ -260,7 +327,14 @@
 			// 加载已有评分记录
 			loadExistingRating() {
 				console.log('开始加载当前考核对象评分记录:', this.currentSubject.name);
-				const userInfo = uni.getStorageSync('userInfo') || {};
+				
+				// 获取并检查用户信息
+				const userInfo = this.getUserInfo();
+				if (!userInfo.username) {
+					console.error('加载评分记录时用户未登录!');
+					return;
+				}
+				
 				console.log('当前用户信息:', userInfo);
 				
 				uniCloud.callFunction({
@@ -276,35 +350,48 @@
 				}).then(res => {
 					console.log('获取评分记录结果:', res.result);
 					if (res.result.code === 0 && res.result.data) {
-						this.existingRating = res.result.data.rating;
-						console.log('已有评分记录:', this.existingRating);
+						const rating = res.result.data.rating;
 						
-						// 填充已有评分
-						if (this.existingRating) {
-							// 更新评分项分数
-							if (this.existingRating.scores && this.existingRating.scores.length > 0) {
-								this.existingRating.scores.forEach((score, index) => {
-									if (index < this.scores.length) {
-										this.scores[index].score = score.score;
-									}
-								});
+						// 严格验证返回的评分数据是否匹配当前考核对象
+						if (rating && rating.subject === this.currentSubject.name) {
+							this.existingRating = rating;
+							console.log('已有评分记录:', this.existingRating);
+							
+							// 填充已有评分
+							if (this.existingRating) {
+								// 更新评分项分数
+								if (this.existingRating.scores && this.existingRating.scores.length > 0) {
+									this.existingRating.scores.forEach((score, index) => {
+										if (index < this.scores.length) {
+											this.scores[index].score = score.score;
+										}
+									});
+								}
+								
+								// 更新评分状态
+								this.$set(this.subjectRatingStatus, this.currentSubjectIndex, true);
+								console.log('更新评分状态, 索引:', this.currentSubjectIndex, '状态:', this.subjectRatingStatus);
+								
+								// 存储到allScores中，避免切换后丢失
+								this.allScores[this.currentSubject._id] = [...this.scores];
+								console.log('保存评分到allScores:', this.currentSubject._id, this.allScores[this.currentSubject._id]);
 							}
-							
-							// 更新评分状态
-							this.$set(this.subjectRatingStatus, this.currentSubjectIndex, true);
-							console.log('更新评分状态, 索引:', this.currentSubjectIndex, '状态:', this.subjectRatingStatus);
-							
-							// 存储到allScores中，避免切换后丢失
-							this.allScores[this.currentSubject._id] = [...this.scores];
-							console.log('保存评分到allScores:', this.currentSubject._id, this.allScores[this.currentSubject._id]);
 						} else {
-							console.log('没有找到当前考核对象的评分记录');
+							console.error('服务器返回了错误的评分对象数据:', 
+										 rating ? `返回对象: ${rating.subject}, 当前对象: ${this.currentSubject.name}` : '无数据');
+							// 清空评分，因为没有找到对应的评分记录
+							this.existingRating = null;
+							this.initScores(); // 重新初始化评分
+							console.log('为当前考核对象创建新评分');
 						}
 					} else {
 						console.log('获取评分记录失败或无数据');
+						// 确保当前评分已重置
+						this.existingRating = null;
 					}
 				}).catch(err => {
 					console.error('加载评分记录失败:', err);
+					this.existingRating = null;
 				});
 			},
 			
@@ -360,11 +447,30 @@
 					return;
 				}
 				
+				// 获取并检查用户信息
+				const userInfo = this.getUserInfo();
+				console.log('提交评分前的用户信息:', userInfo);
+				
+				// 检查用户信息是否存在
+				if (!userInfo.username) {
+					console.error('提交评分时用户未登录或登录状态已失效!');
+					uni.showToast({
+						title: '用户信息不存在或已过期，请重新登录',
+						icon: 'none',
+						duration: 2000
+					});
+					// 延迟跳转到登录页
+					setTimeout(() => {
+						uni.navigateTo({
+							url: '/pages/login/login'
+						});
+					}, 2000);
+					return;
+				}
+				
 				uni.showLoading({
 					title: '提交中...'
 				});
-				
-				const userInfo = uni.getStorageSync('userInfo') || {};
 				
 				uniCloud.callFunction({
 					name: 'rating',
@@ -446,10 +552,15 @@
 				}
 			},
 			loadSubjectRating() {
-				console.log('加载考核对象评分:', this.currentSubject.name);
+				console.log('=== 加载考核对象评分 ===');
+				console.log('考核对象名称:', this.currentSubject.name);
+				console.log('考核对象ID:', this.currentSubject._id);
+				
 				if (this.allScores[this.currentSubject._id]) {
 					console.log('从缓存加载评分:', this.allScores[this.currentSubject._id]);
-					this.scores = [...this.allScores[this.currentSubject._id]];
+					// 创建深拷贝，避免引用问题
+					this.scores = JSON.parse(JSON.stringify(this.allScores[this.currentSubject._id]));
+					console.log('已加载缓存评分，当前分数:', this.calculateTotalScore());
 					return;
 				}
 				
@@ -485,6 +596,28 @@
 					title: '批量提交中...'
 				});
 				
+				// 获取并检查用户信息
+				const userInfo = this.getUserInfo();
+				console.log('批量提交评分前的用户信息:', userInfo);
+				
+				// 检查用户信息是否存在
+				if (!userInfo.username) {
+					console.error('批量提交评分时用户未登录或登录状态已失效!');
+					uni.hideLoading();
+					uni.showToast({
+						title: '用户信息不存在或已过期，请重新登录',
+						icon: 'none',
+						duration: 2000
+					});
+					// 延迟跳转到登录页
+					setTimeout(() => {
+						uni.navigateTo({
+							url: '/pages/login/login'
+						});
+					}, 2000);
+					return;
+				}
+				
 				const promises = this.pendingSubmissions.map(subjectId => {
 					const subject = this.subjects.find(s => s._id === subjectId);
 					const scores = this.allScores[subjectId];
@@ -495,9 +628,10 @@
 							action: 'submitRating',
 							data: {
 								table_id: this.tableId,
-								rater: uni.getStorageSync('userInfo').username,
+								rater: userInfo.username,
 								subject: subject.name,
-								scores: scores
+								scores: scores,
+								comment: ''
 							}
 						}
 					});
@@ -527,13 +661,20 @@
 			// 加载所有考核对象的评分状态
 			loadAllRatingStatus() {
 				console.log('开始加载所有考核对象评分状态');
+				
+				// 获取并检查用户信息
+				const userInfo = this.getUserInfo();
+				console.log('加载评分状态的用户信息:', userInfo);
+				
+				if (!userInfo.username) {
+					console.error('加载评分状态时用户未登录!');
+					return;
+				}
+				
 				// 显示加载指示器
 				uni.showLoading({
 					title: '加载评分数据...'
 				});
-				
-				const userInfo = uni.getStorageSync('userInfo') || {};
-				console.log('当前用户信息:', userInfo);
 				
 				// 调用云函数获取评分表所有评分记录
 				uniCloud.callFunction({
@@ -553,39 +694,52 @@
 						const ratings = res.result.data.ratings;
 						console.log('评分记录数量:', ratings.length);
 						
+						// 重置评分状态，确保没有历史状态干扰
+						this.subjectRatingStatus = new Array(this.subjects.length).fill(false);
+						
 						// 处理每个评分记录
 						ratings.forEach(rating => {
 							console.log('处理评分记录:', rating.subject);
 							// 找到对应的考核对象索引
 							const subjectIndex = this.subjects.findIndex(s => s.name === rating.subject);
-							console.log('考核对象索引:', subjectIndex);
+							console.log('考核对象索引:', subjectIndex, '匹配考核对象:', this.subjects[subjectIndex]?.name || '未找到');
+							
 							if (subjectIndex !== -1) {
-								// 更新评分状态
-								this.$set(this.subjectRatingStatus, subjectIndex, true);
-								console.log('更新评分状态, 索引:', subjectIndex, '状态:', this.subjectRatingStatus);
+								const subject = this.subjects[subjectIndex];
 								
-								// 存储评分数据
-								if (rating.scores && rating.scores.length > 0) {
-									// 确保allScores中有该考核对象的记录
-									if (!this.allScores[this.subjects[subjectIndex]._id]) {
-										this.allScores[this.subjects[subjectIndex]._id] = this.table.items.map(item => {
-											return {
-												item_id: item._id || '',
-												name: item.name,
-												score: 0,
-												maxScore: item.maxScore
-											};
-										});
-									}
+								// 确保评分记录与考核对象名称严格匹配
+								if (rating.subject === subject.name) {
+									// 更新评分状态
+									this.$set(this.subjectRatingStatus, subjectIndex, true);
+									console.log('更新评分状态, 索引:', subjectIndex, '状态:', this.subjectRatingStatus);
 									
-									// 更新分数
-									rating.scores.forEach((score, idx) => {
-										if (idx < this.allScores[this.subjects[subjectIndex]._id].length) {
-											this.allScores[this.subjects[subjectIndex]._id][idx].score = score.score;
+									// 存储评分数据
+									if (rating.scores && rating.scores.length > 0) {
+										// 确保allScores中有该考核对象的记录
+										if (!this.allScores[subject._id]) {
+											this.allScores[subject._id] = this.table.items.map(item => {
+												return {
+													item_id: item._id || '',
+													name: item.name,
+													score: 0,
+													maxScore: item.maxScore
+												};
+											});
 										}
-									});
-									console.log('更新分数:', this.subjects[subjectIndex]._id, this.allScores[this.subjects[subjectIndex]._id]);
+										
+										// 更新分数
+										rating.scores.forEach((score, idx) => {
+											if (idx < this.allScores[subject._id].length) {
+												this.allScores[subject._id][idx].score = score.score;
+											}
+										});
+										console.log('更新分数:', subject._id, this.allScores[subject._id]);
+									}
+								} else {
+									console.error('考核对象名称不匹配:', '评分记录中的名称:', rating.subject, '考核对象名称:', subject.name);
 								}
+							} else {
+								console.warn('未找到评分记录对应的考核对象:', rating.subject);
 							}
 						});
 						
