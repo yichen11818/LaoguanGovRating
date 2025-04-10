@@ -21,8 +21,10 @@
 					class="subject-tab" 
 					:class="{'active': currentSubjectIndex === index}"
 					@click="switchToSubject(index)">
-					<text class="subject-name">{{subject.name}}</text>
-					<text class="subject-score" v-if="getSubjectTotalScore(subject._id)">{{getSubjectTotalScore(subject._id)}}分</text>
+					<view class="subject-info">
+						<text class="subject-name">{{subject.name}}</text>
+						<text class="subject-score-value" v-if="getSubjectTotalScore(subject._id)">{{getSubjectTotalScore(subject._id)}}分</text>
+					</view>
 					<text class="subject-status" v-if="subjectRatingStatus[index]">已评</text>
 				</view>
 			</scroll-view>
@@ -138,9 +140,10 @@
 		computed: {
 			subjectOptions() {
 				return this.subjects.map(item => {
+					const score = this.getSubjectTotalScore(item._id);
 					return {
 						_id: item._id,
-						name: item.name,
+						name: score ? `${item.name} (${score}分)` : item.name,
 						position: item.position,
 						department: item.department
 					}
@@ -857,11 +860,12 @@
 	
 	.subject-tab {
 		display: inline-block;
-		padding: 8px 15px;
-		margin-right: 10px;
+		padding: 10px 15px;
+		margin-right: 12px;
 		background-color: #f2f2f2;
 		border-radius: 20px;
 		position: relative;
+		min-width: 100rpx;
 	}
 	
 	.subject-tab.active {
@@ -869,40 +873,48 @@
 		color: white;
 	}
 	
-	.subject-name {
-		font-size: 14px;
+	.subject-tab.active .subject-score-value {
+		color: #ffffff;
 	}
 	
-	.subject-score {
-		position: absolute;
-		right: -5px;
-		bottom: -5px;
-		background-color: #2196f3;
-		color: white;
-		font-size: 10px;
-		padding: 2px 5px;
-		border-radius: 10px;
+	.subject-info {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+	}
+	
+	.subject-name {
+		font-size: 28rpx;
+		margin-bottom: 4rpx;
+	}
+	
+	.subject-score-value {
+		font-size: 24rpx;
+		color: #2196f3;
+		font-weight: bold;
 	}
 	
 	.subject-status {
 		position: absolute;
-		right: -5px;
-		top: -5px;
+		right: -6px;
+		top: -6px;
 		background-color: #ff7043;
 		color: white;
-		font-size: 10px;
-		padding: 2px 5px;
-		border-radius: 10px;
+		font-size: 20rpx;
+		padding: 3px 8px;
+		border-radius: 16rpx;
+		z-index: 2;
 	}
 	
 	.picker-content {
-		height: 80rpx;
+		height: 90rpx;
 		border: 1rpx solid #eee;
 		border-radius: 8rpx;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0 20rpx;
+		padding: 0 30rpx;
+		background-color: #f9f9f9;
 	}
 	
 	.picker-left {
@@ -912,19 +924,23 @@
 	}
 	
 	.picker-text {
-		font-size: 30rpx;
+		font-size: 32rpx;
 		color: #333;
-	}
-	
-	.picker-score {
-		margin-left: 10rpx;
-		font-size: 24rpx;
-		color: #2196f3;
 		font-weight: bold;
 	}
 	
+	.picker-score {
+		margin-left: 15rpx;
+		font-size: 28rpx;
+		color: #2196f3;
+		font-weight: bold;
+		background-color: rgba(33, 150, 243, 0.1);
+		padding: 4rpx 12rpx;
+		border-radius: 16rpx;
+	}
+	
 	.picker-arrow {
-		font-size: 24rpx;
+		font-size: 28rpx;
 		color: #999;
 	}
 	
