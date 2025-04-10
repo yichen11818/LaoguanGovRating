@@ -42,7 +42,7 @@
 					</view>
 					<view class="info-item">
 						<text class="info-label">评分人:</text>
-						<text class="info-value">{{table.rater}}</text>
+						<text class="info-value">{{getRaterName(table.rater)}}</text>
 					</view>
 					<view class="info-item">
 						<text class="info-label">项目数:</text>
@@ -420,8 +420,14 @@
 			}
 		},
 		onLoad() {
-			this.loadTables();
-			this.loadRaters();
+			// 先加载评分人列表，然后再加载表格数据
+			this.loadRaters().then(() => {
+				this.loadTables();
+			}).catch(err => {
+				console.error('加载评分人列表失败:', err);
+				this.loadTables(); // 即使加载评分人失败，也加载表格
+			});
+			
 			this.loadAllSubjects(); // 加载所有考核对象
 			
 			// 确保搜索关键词是字符串
@@ -462,6 +468,7 @@
 			// 加载评分表
 			loadTables() {
 				this.isLoading = true;
+				console.log('开始加载评分表，当前评分人列表数量:', this.raters.length);
 				
 				const type = this.typeOptions[this.currentTypeIndex].id;
 				
@@ -489,6 +496,15 @@
 						
 						this.total = data.total;
 						this.hasMoreData = this.tables.length < this.total;
+						
+						// 打印第一个表格的评分人信息
+						if (this.tables.length > 0) {
+							const firstTable = this.tables[0];
+							console.log('第一个表格评分人:', {
+								rater: firstTable.rater,
+								displayName: this.getRaterName(firstTable.rater)
+							});
+						}
 					} else {
 						uni.showToast({
 							title: res.result.msg || '加载失败',
@@ -515,25 +531,36 @@
 			
 			// 加载评分人列表
 			loadRaters() {
-				uniCloud.callFunction({
-					name: 'user',
-					data: {
-						action: 'getUsers',
+				console.log('开始加载评分人列表');
+				return new Promise((resolve, reject) => {
+					uniCloud.callFunction({
+						name: 'user',
 						data: {
-							role: 'rater',
-							pageSize: 100
+							action: 'getUsers',
+							data: {
+								role: 'rater',
+								pageSize: 100
+							}
 						}
-					}
-				}).then(res => {
-					if (res.result.code === 0) {
-						const data = res.result.data;
-						this.raters = [{ username: '', name: '请选择评分人' }].concat(data.list.map(item => {
-							return {
-								username: item.username,
-								name: item.name || item.username
-							};
-						}));
-					}
+					}).then(res => {
+						if (res.result.code === 0) {
+							const data = res.result.data;
+							this.raters = [{ username: '', name: '请选择评分人' }].concat(data.list.map(item => {
+								return {
+									username: item.username,
+									name: item.name || item.username
+								};
+							}));
+							console.log('评分人列表加载成功，数量:', this.raters.length - 1);
+							resolve();
+						} else {
+							console.error('评分人列表加载失败:', res.result.msg);
+							reject(new Error(res.result.msg || '加载评分人列表失败'));
+						}
+					}).catch(err => {
+						console.error('评分人列表加载失败:', err);
+						reject(err);
+					});
 				});
 			},
 			
@@ -1003,61 +1030,21 @@
 			// 添加处理输入事件的方法
 			handleSearchInput(event) {
 				try {
-					// 输出关键属性而不是整个对象，避免循环引用
-					console.log('搜索框输入事件:', {
-						type: event.type,
-						timeStamp: event.timeStamp
-					});
-					
-					if (event.detail) {
-						console.log('event.detail:', {
-							value: event.detail.value,
-							cursor: event.detail.cursor
-						});
-					}
-					
-					// 在不同环境中，输入值可能存储在不同的位置
-					let value = '';
-					
-					// 首先检查event.detail
-					if (event.detail && event.detail.value !== undefined) {
-						value = event.detail.value;
-						console.log('从event.detail获取到值:', value);
-					} 
-					// 然后检查event.target
-					else if (event.target && event.target.value !== undefined) {
-						value = event.target.value;
-						console.log('从event.target获取到值:', value);
-					}
-					// 尝试直接从event获取value
-					else if (event.value !== undefined) {
-						value = event.value;
-						console.log('直接从event获取到值:', value);
-					}
-					// 检查DOM元素的value
-					else if (event._target && event._target.value !== undefined) {
-						value = event._target.value;
-						console.log('从event._target获取到值:', value);
-					}
-					// 最后尝试获取当前输入框的值
-					else {
-						// 将输入框当前值设为空字符串，避免undefined
-						value = '';
-						console.log('无法从事件中获取值，使用空字符串');
-					}
+					console.log('搜索框输入事件:', event);
+					const value = event.target ? event.target.value : event.detail.value;
+					console.log('输入值类型:', typeof value, '值:', value);
 					
 					// 确保值是字符串
 					if (typeof value === 'string') {
 						this.subjectSearchKey = value;
-						console.log('设置搜索关键词:', this.subjectSearchKey);
-					} else if (value !== null && value !== undefined) {
+					} else if (value && value.toString) {
 						// 尝试转换为字符串
-						this.subjectSearchKey = String(value);
-						console.log('将非字符串值转换为字符串:', this.subjectSearchKey);
+						this.subjectSearchKey = value.toString();
+						console.log('搜索值转换为字符串:', this.subjectSearchKey);
 					} else {
 						// 重置为空字符串
 						this.subjectSearchKey = '';
-						console.log('重置搜索关键词为空字符串');
+						console.error('输入值无法转换为字符串');
 					}
 				} catch (err) {
 					console.error('处理搜索输入错误:', err);
@@ -1438,6 +1425,13 @@
 				});
 				
 				console.log('====================');
+			},
+			
+			// 获取评分人真实姓名
+			getRaterName(username) {
+				if (!username) return '未指定';
+				const rater = this.raters.find(r => r.username === username);
+				return rater ? rater.name || username : username;
 			}
 		}
 	}

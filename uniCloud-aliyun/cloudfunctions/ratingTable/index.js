@@ -39,7 +39,7 @@ exports.main = async (event, context) => {
 
 // 创建评分表
 async function createTable(data) {
-  const { name, type, category, rater, items = [] } = data;
+  const { name, type, category, rater, items = [], selectedSubjects = [] } = data;
   
   // 参数校验
   if (!name || !type || !rater) {
@@ -106,6 +106,31 @@ async function createTable(data) {
       assignedTables
     });
     
+    // 处理考核对象关联
+    if (selectedSubjects && selectedSubjects.length > 0) {
+      console.log(`关联${selectedSubjects.length}个考核对象到评分表${result.id}`);
+      
+      // 准备批量添加的考核对象数据
+      const subjectsToAdd = selectedSubjects.map(subject => {
+        // 创建新对象避免修改原始数据
+        const newSubject = { ...subject };
+        
+        // 确保有table_id字段关联到评分表
+        newSubject.table_id = result.id;
+        
+        // 如果考核对象有_id字段但是来自前端选择，需要移除_id以便数据库生成新ID
+        if (newSubject._id && !newSubject._id.includes('_')) {
+          delete newSubject._id;
+        }
+        
+        return newSubject;
+      });
+      
+      // 批量添加考核对象到subjects集合
+      const addResult = await subjectCollection.add(subjectsToAdd);
+      console.log('添加考核对象结果:', addResult);
+    }
+    
     return {
       code: 0,
       msg: '创建评分表成功',
@@ -114,6 +139,7 @@ async function createTable(data) {
       }
     };
   } catch (e) {
+    console.error('创建评分表出错:', e);
     return {
       code: -1,
       msg: '创建评分表失败',
@@ -127,13 +153,80 @@ async function updateTable(data) {
   const { tableId, updateData } = data;
   
   try {
-    await ratingTableCollection.doc(tableId).update(updateData);
+    // 从updateData中提取selectedSubjects，避免将其直接保存到评分表中
+    const { selectedSubjects, ...tableUpdateData } = updateData;
+    
+    // 更新评分表基本信息
+    await ratingTableCollection.doc(tableId).update(tableUpdateData);
+    
+    // 处理考核对象关联
+    if (selectedSubjects && Array.isArray(selectedSubjects)) {
+      console.log(`处理评分表${tableId}的考核对象关联，共${selectedSubjects.length}个对象`);
+      
+      // 获取当前关联的考核对象
+      const currentSubjects = await subjectCollection.where({
+        table_id: tableId
+      }).get();
+      
+      // 当前关联的考核对象ID集合
+      const currentSubjectIds = currentSubjects.data.map(s => s._id);
+      console.log('当前关联的考核对象IDs:', currentSubjectIds);
+      
+      // 新提交的考核对象ID集合
+      const newSubjectIds = selectedSubjects.map(s => s._id).filter(id => id);
+      console.log('新提交的考核对象IDs:', newSubjectIds);
+      
+      // 需要删除的考核对象（在当前列表中但不在新列表中）
+      const subjectsToDelete = currentSubjects.data.filter(s => 
+        !newSubjectIds.includes(s._id)
+      );
+      
+      // 需要新增的考核对象（在新列表中但不在当前列表中）
+      const subjectsToAdd = selectedSubjects.filter(s => 
+        !s._id || !currentSubjectIds.includes(s._id)
+      );
+      
+      console.log(`需要删除${subjectsToDelete.length}个考核对象，需要新增${subjectsToAdd.length}个考核对象`);
+      
+      // 删除不再关联的考核对象
+      if (subjectsToDelete.length > 0) {
+        const deleteIds = subjectsToDelete.map(s => s._id);
+        const deleteResult = await subjectCollection.where({
+          _id: db.command.in(deleteIds)
+        }).remove();
+        console.log('删除考核对象结果:', deleteResult);
+      }
+      
+      // 添加新关联的考核对象
+      if (subjectsToAdd.length > 0) {
+        // 准备批量添加的考核对象数据
+        const subjectsData = subjectsToAdd.map(subject => {
+          // 创建新对象避免修改原始数据
+          const newSubject = { ...subject };
+          
+          // 确保有table_id字段关联到评分表
+          newSubject.table_id = tableId;
+          
+          // 如果考核对象有_id字段但是来自前端选择，需要移除_id以便数据库生成新ID
+          if (newSubject._id && !newSubject._id.includes('_')) {
+            delete newSubject._id;
+          }
+          
+          return newSubject;
+        });
+        
+        // 批量添加考核对象到subjects集合
+        const addResult = await subjectCollection.add(subjectsData);
+        console.log('添加考核对象结果:', addResult);
+      }
+    }
     
     return {
       code: 0,
       msg: '更新评分表成功'
     };
   } catch (e) {
+    console.error('更新评分表出错:', e);
     return {
       code: -1,
       msg: '更新评分表失败',

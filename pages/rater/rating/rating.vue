@@ -37,6 +37,15 @@
 		<view class="rating-form" v-if="currentSubject._id">
 			<text class="section-title">评分项目</text>
 			
+			<!-- 添加评分说明，仅班子评分-中层干部考核评分表（分别评分)时显示 -->
+			<view class="rating-instructions" v-if="table.type === 3">
+				<text class="instructions-title">评分说明：</text>
+				<view class="instructions-content">
+					<text>1. 请直接给出考核对象重点工作完成情况和办公室管理情况得分之和。</text>
+					<text>2. 评分时，91-100分的占30%(3人)，81-90分的占60%（6人），80分以下的占10%（1人），请不要出现同分的情况。</text>
+				</view>
+			</view>
+			
 			<view class="form-item" v-for="(item, index) in table.items" :key="index">
 				<view class="item-header">
 					<text class="item-name">{{item.name}}</text>
@@ -570,6 +579,33 @@
 		padding: 30rpx;
 		margin-bottom: 30rpx;
 		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+	}
+	
+	.rating-instructions {
+		background-color: #f5f5f5;
+		border-radius: 16rpx;
+		padding: 20rpx;
+		margin-bottom: 20rpx;
+		border-left: 4px solid #07c160;
+	}
+	
+	.instructions-title {
+		font-size: 32rpx;
+		font-weight: bold;
+		margin-bottom: 10rpx;
+		color: #333;
+	}
+	
+	.instructions-content {
+		font-size: 28rpx;
+		color: #666;
+		display: flex;
+		flex-direction: column;
+	}
+	
+	.instructions-content text {
+		line-height: 1.6;
+		margin-bottom: 10rpx;
 	}
 	
 	.form-item {
