@@ -140,23 +140,56 @@ async function deleteSubject(data) {
 
 // 获取考核对象列表
 async function getSubjects(data) {
-  const { table_id, page = 1, pageSize = 10 } = data;
+  const { table_id, page = 1, pageSize = 10, keyword = '' } = data;
+  
+  console.log('搜索参数:', JSON.stringify(data));
   
   try {
-    let query = subjectCollection;
+    // 构建查询条件
+    let whereObj = {};
     
-    // 筛选条件
+    // 按评分表筛选
     if (table_id) {
-      query = query.where({
-        table_id: db.command.in([table_id])
-      });
+      whereObj.table_id = db.command.in([table_id]);
     }
+    
+    // 关键词搜索 - 最基本的方式
+    if (keyword && keyword.trim().length > 0) {
+      const trimmedKeyword = keyword.trim();
+      console.log('执行关键词搜索:', trimmedKeyword);
+      
+      // 名称字段直接包含关键词（不区分大小写）
+      const orConditions = [
+        { name: { $regex: trimmedKeyword, $options: 'i' } },
+        { department: { $regex: trimmedKeyword, $options: 'i' } },
+        { position: { $regex: trimmedKeyword, $options: 'i' } }
+      ];
+      
+      // 如果已有筛选条件，使用$and组合
+      if (Object.keys(whereObj).length > 0) {
+        whereObj = {
+          $and: [
+            whereObj,
+            { $or: orConditions }
+          ]
+        };
+      } else {
+        whereObj = { $or: orConditions };
+      }
+      
+      console.log('搜索条件:', JSON.stringify(whereObj));
+    }
+    
+    // 执行查询
+    const query = subjectCollection.where(whereObj);
     
     // 分页查询
     const subjectList = await query.skip((page - 1) * pageSize).limit(pageSize).get();
     
     // 获取总数
     const countResult = await query.count();
+    
+    console.log(`搜索结果: 找到 ${countResult.total} 条记录`);
     
     return {
       code: 0,
@@ -165,13 +198,15 @@ async function getSubjects(data) {
         list: subjectList.data,
         total: countResult.total,
         page,
-        pageSize
+        pageSize,
+        keyword // 返回关键词用于调试
       }
     };
   } catch (e) {
+    console.error('搜索失败:', e);
     return {
       code: -1,
-      msg: '获取考核对象列表失败',
+      msg: '获取考核对象列表失败: ' + e.message,
       error: e.message
     };
   }

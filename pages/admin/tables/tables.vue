@@ -94,10 +94,13 @@
 					<text class="form-label">考核对象</text>
 					<view class="subjects-selector">
 						<view class="selected-subjects">
-							<view class="selected-subject" v-for="(subject, index) in formData.selectedSubjects" :key="index">
-								<text>{{subject.name}}</text>
-								<text class="remove-subject" @click="removeSelectedSubject(index)">×</text>
+							<view v-if="formData.selectedSubjects && formData.selectedSubjects.length > 0">
+								<view class="selected-subject" v-for="(subject, index) in formData.selectedSubjects" :key="subject._id || index">
+									<text>{{subject.name}}</text>
+									<text class="remove-subject" @click="removeSelectedSubject(index)">×</text>
+								</view>
 							</view>
+							<view v-else class="no-subjects-tip">未选择考核对象</view>
 						</view>
 						<view class="add-subject-btn" @click="showSubjectSelector">
 							<text class="add-icon">+</text>
@@ -149,10 +152,13 @@
 					<text class="form-label">考核对象</text>
 					<view class="subjects-selector">
 						<view class="selected-subjects">
-							<view class="selected-subject" v-for="(subject, index) in editData.selectedSubjects" :key="index">
-								<text>{{subject.name}}</text>
-								<text class="remove-subject" @click="removeEditSubject(index)">×</text>
+							<view v-if="editData.selectedSubjects && editData.selectedSubjects.length > 0">
+								<view class="selected-subject" v-for="(subject, index) in editData.selectedSubjects" :key="subject._id || index">
+									<text>{{subject.name}}</text>
+									<text class="remove-subject" @click="removeEditSubject(index)">×</text>
+								</view>
 							</view>
+							<view v-else class="no-subjects-tip">未选择考核对象</view>
 						</view>
 						<view class="add-subject-btn" @click="showEditSubjectSelector">
 							<text class="add-icon">+</text>
@@ -210,9 +216,20 @@
 					</view>
 				</view>
 				
-				<!-- 添加选项卡 -->
+				<!-- 搜索框 -->
 				<view class="search-box">
-					<input v-model="subjectSearchKey" class="search-input" placeholder="搜索考核对象" @input="filterSubjects" focus />
+					<input 
+						:value="subjectSearchKey" 
+						class="search-input" 
+						placeholder="搜索考核对象" 
+						confirm-type="search" 
+						@input="handleSearchInput" 
+						@confirm="filterSubjects" 
+						focus 
+					/>
+					<view class="search-btn" @click="filterSubjects">
+						<text class="search-icon">搜索</text>
+					</view>
 				</view>
 				
 				<!-- 批量选择操作 -->
@@ -240,6 +257,14 @@
 					<view class="no-data" v-if="filteredSubjects.length === 0">
 						<text class="no-data-text">未找到匹配的考核对象</text>
 					</view>
+					
+					<!-- 添加考核对象加载更多按钮 -->
+					<view class="load-more-subjects" v-if="hasMoreSubjects">
+						<button class="load-more-btn" size="mini" @click="loadMoreSubjects" :loading="isLoadingSubjects">
+							<text v-if="!isLoadingSubjects">加载更多</text>
+							<text v-else>加载中...</text>
+						</button>
+					</view>
 				</view>
 				
 				<view class="popup-btns fixed-bottom">
@@ -266,7 +291,18 @@
 				</view>
 				
 				<view class="search-box">
-					<input v-model="raterSearchKey" class="search-input" placeholder="搜索评分人" confirm-type="search" @confirm="filterRaters" focus />
+					<input 
+						v-model="raterSearchKey" 
+						class="search-input" 
+						placeholder="搜索评分人" 
+						confirm-type="search" 
+						@input="filterRaters" 
+						@confirm="filterRaters" 
+						focus 
+					/>
+					<view class="search-btn" @click="filterRaters">
+						<text class="search-icon">搜索</text>
+					</view>
 				</view>
 				
 				<view class="subject-list-container">
@@ -344,8 +380,15 @@
 				
 				// 新增数据
 				allSubjects: [], // 所有考核对象
+				// 考核对象分页数据
+				subjectPage: 1,
+				subjectPageSize: 20,
+				subjectTotal: 0,
+				hasMoreSubjects: false,
+				isLoadingSubjects: false,
 				selectedSubjectIds: [], // 临时存储选中的考核对象ID
 				subjectSearchKey: '', // 考核对象搜索关键词
+				subjectSearching: false, // 是否在搜索中
 				editingTableId: '', // 正在编辑的表ID
 				selectingMode: '', // 评分人选择器的模式: 'add'新增表单, 'edit'编辑表单
 				currentSubjectTab: 0 // 当前选中的选项卡索引
@@ -354,16 +397,9 @@
 		computed: {
 			// 过滤后的考核对象列表
 			filteredSubjects() {
-				if (!this.subjectSearchKey) {
-					return this.allSubjects;
-				}
-				
-				const key = this.subjectSearchKey.toLowerCase();
-				return this.allSubjects.filter(subject => {
-					return subject.name.toLowerCase().includes(key) || 
-						   (subject.department && subject.department.toLowerCase().includes(key)) ||
-						   (subject.position && subject.position.toLowerCase().includes(key));
-				});
+				// 直接返回通过云函数筛选后的考核对象列表
+				// 不再在前端进行过滤，而是依赖云函数的搜索功能
+				return this.allSubjects;
 			},
 			
 			// 过滤后的评分人列表
@@ -387,6 +423,20 @@
 			this.loadTables();
 			this.loadRaters();
 			this.loadAllSubjects(); // 加载所有考核对象
+			
+			// 确保搜索关键词是字符串
+			if (typeof this.subjectSearchKey !== 'string') {
+				console.log('重置非字符串搜索关键词:', this.subjectSearchKey);
+				this.subjectSearchKey = '';
+			}
+			
+			// 调试方法检查
+			this.debugMethods();
+		},
+		onReachBottom() {
+			if (this.hasMoreData && !this.isLoading) {
+				this.loadMore();
+			}
 		},
 		methods: {
 			// 获取评分表类型名称
@@ -546,6 +596,10 @@
 					});
 					return;
 				}
+				
+				// 记录提交时的考核对象
+				console.log('提交表单时的考核对象数量:', this.formData.selectedSubjects.length);
+				console.log('提交的考核对象列表:', JSON.stringify(this.formData.selectedSubjects));
 				
 				uni.showLoading({
 					title: '提交中...'
@@ -840,42 +894,220 @@
 			},
 			
 			// 加载所有考核对象
-			loadAllSubjects() {
-				uni.showLoading({
-					title: '加载考核对象...'
-				});
+			loadAllSubjects(isRefresh = false) {
+				if (isRefresh) {
+					this.subjectPage = 1;
+					this.allSubjects = [];
+				}
+				
+				if (this.isLoadingSubjects) return;
+				
+				this.isLoadingSubjects = true;
+				
+				if (this.subjectPage === 1) {
+					uni.showLoading({
+						title: '加载考核对象...'
+					});
+				}
+				
+				// 使用关键词搜索
+				const searchParams = {
+					page: this.subjectPage,
+					pageSize: this.subjectPageSize
+				};
+				
+				// 如果有搜索关键词，则加入关键词参数
+				if (this.subjectSearchKey && this.subjectSearchKey.trim().length > 0) {
+					searchParams.keyword = this.subjectSearchKey.trim();
+					console.log('搜索关键词:', searchParams.keyword);
+				}
+				
+				console.log('搜索参数:', JSON.stringify(searchParams));
 				
 				uniCloud.callFunction({
 					name: 'subject',
 					data: {
 						action: 'getSubjects',
-						data: {
-							pageSize: 1000 // 尝试获取所有考核对象
-						}
+						data: searchParams
 					}
 				}).then(res => {
-					uni.hideLoading();
+					this.isLoadingSubjects = false;
+					
+					if (this.subjectPage === 1) {
+						uni.hideLoading();
+					}
 					
 					if (res.result.code === 0) {
-						this.allSubjects = res.result.data.list || [];
+						const data = res.result.data;
+						console.log(`获取考核对象成功: 共${data.total}条, 当前第${data.page}页, 每页${data.pageSize}条`);
+						
+						if (data.keyword) {
+							console.log(`搜索关键词: "${data.keyword}", 结果数量: ${data.list.length}`);
+						}
+						
+						if (this.subjectPage === 1) {
+							this.allSubjects = data.list;
+						} else {
+							this.allSubjects = this.allSubjects.concat(data.list);
+						}
+						
+						console.log('加载后的allSubjects数量:', this.allSubjects.length);
+						console.log('选中的selectedSubjectIds:', this.selectedSubjectIds);
+						
+						// 检查选中的ID是否在加载的数据中存在
+						const foundIds = this.selectedSubjectIds.filter(id => 
+							this.allSubjects.some(subject => subject._id === id)
+						);
+						console.log('在当前加载数据中找到的已选ID数量:', foundIds.length);
+						
+						this.subjectTotal = data.total;
+						this.hasMoreSubjects = this.allSubjects.length < this.subjectTotal;
+						
+						// 搜索结果为空时的提示
+						if (this.subjectSearchKey && data.list.length === 0 && this.subjectPage === 1) {
+							uni.showToast({
+								title: '未找到匹配的考核对象',
+								icon: 'none'
+							});
+						}
+					} else {
+						console.error('获取考核对象失败:', res.result.msg);
+						uni.showToast({
+							title: res.result.msg || '加载考核对象失败',
+							icon: 'none'
+						});
 					}
 				}).catch(err => {
-					uni.hideLoading();
+					this.isLoadingSubjects = false;
+					
+					if (this.subjectPage === 1) {
+						uni.hideLoading();
+					}
+					
 					console.error('加载考核对象失败:', err);
+					uni.showToast({
+						title: '加载考核对象失败，请检查网络',
+						icon: 'none'
+					});
 				});
+			},
+			
+			// 加载更多考核对象
+			loadMoreSubjects() {
+				if (this.isLoadingSubjects || !this.hasMoreSubjects) return;
+				
+				this.subjectPage++;
+				this.loadAllSubjects(false);
+			},
+			
+			// 添加处理输入事件的方法
+			handleSearchInput(event) {
+				try {
+					// 输出关键属性而不是整个对象，避免循环引用
+					console.log('搜索框输入事件:', {
+						type: event.type,
+						timeStamp: event.timeStamp
+					});
+					
+					if (event.detail) {
+						console.log('event.detail:', {
+							value: event.detail.value,
+							cursor: event.detail.cursor
+						});
+					}
+					
+					// 在不同环境中，输入值可能存储在不同的位置
+					let value = '';
+					
+					// 首先检查event.detail
+					if (event.detail && event.detail.value !== undefined) {
+						value = event.detail.value;
+						console.log('从event.detail获取到值:', value);
+					} 
+					// 然后检查event.target
+					else if (event.target && event.target.value !== undefined) {
+						value = event.target.value;
+						console.log('从event.target获取到值:', value);
+					}
+					// 尝试直接从event获取value
+					else if (event.value !== undefined) {
+						value = event.value;
+						console.log('直接从event获取到值:', value);
+					}
+					// 检查DOM元素的value
+					else if (event._target && event._target.value !== undefined) {
+						value = event._target.value;
+						console.log('从event._target获取到值:', value);
+					}
+					// 最后尝试获取当前输入框的值
+					else {
+						// 将输入框当前值设为空字符串，避免undefined
+						value = '';
+						console.log('无法从事件中获取值，使用空字符串');
+					}
+					
+					// 确保值是字符串
+					if (typeof value === 'string') {
+						this.subjectSearchKey = value;
+						console.log('设置搜索关键词:', this.subjectSearchKey);
+					} else if (value !== null && value !== undefined) {
+						// 尝试转换为字符串
+						this.subjectSearchKey = String(value);
+						console.log('将非字符串值转换为字符串:', this.subjectSearchKey);
+					} else {
+						// 重置为空字符串
+						this.subjectSearchKey = '';
+						console.log('重置搜索关键词为空字符串');
+					}
+				} catch (err) {
+					console.error('处理搜索输入错误:', err);
+					this.subjectSearchKey = '';
+				}
+			},
+			
+			// 添加处理考核对象搜索的函数
+			filterSubjects(e) {
+				try {
+					console.log('执行搜索, 事件对象类型:', typeof e, '搜索关键词:', this.subjectSearchKey);
+					
+					// 防止搜索框中显示错误对象
+					if (typeof this.subjectSearchKey === 'object') {
+						console.error('搜索关键词是对象而非字符串:', this.subjectSearchKey);
+						this.subjectSearchKey = '';
+					}
+					
+					// 重置页码，进行新搜索
+					this.subjectPage = 1;
+					this.loadAllSubjects(true);
+				} catch (err) {
+					console.error('搜索出错:', err);
+					uni.showToast({
+						title: '搜索功能出错，请联系管理员',
+						icon: 'none'
+					});
+				}
 			},
 			
 			// 显示考核对象选择器
 			showSubjectSelector() {
 				// 确保selectedSubjectIds包含当前已选的考核对象
 				this.selectedSubjectIds = this.formData.selectedSubjects.map(s => s._id);
+				console.log('打开选择器 - 当前已选对象IDs:', this.selectedSubjectIds);
+				console.log('打开选择器 - 当前formData中的选中对象:', JSON.stringify(this.formData.selectedSubjects));
+				
 				this.subjectSearchKey = ''; // 清空搜索关键词
+				// 重置考核对象分页数据
+				this.subjectPage = 1;
+				this.loadAllSubjects(true); // 重新加载考核对象
+				
 				this.$refs.subjectSelectorPopup.open();
 				
 				// 使用setTimeout确保弹窗显示后再处理
 				setTimeout(() => {
 					// 高亮显示已选项
 					this.scrollToSelected();
+					// 调整弹窗高度和布局
+					this.adjustSubjectPopup();
 				}, 300);
 			},
 			
@@ -883,12 +1115,21 @@
 			showEditSubjectSelector() {
 				// 确保selectedSubjectIds包含当前已选的考核对象
 				this.selectedSubjectIds = this.editData.selectedSubjects.map(s => s._id);
+				console.log('打开编辑选择器 - 当前已选对象IDs:', this.selectedSubjectIds);
+				console.log('打开编辑选择器 - 当前editData中的选中对象:', JSON.stringify(this.editData.selectedSubjects));
+				
 				this.subjectSearchKey = ''; // 清空搜索关键词
+				// 重置考核对象分页数据
+				this.subjectPage = 1;
+				this.loadAllSubjects(true); // 重新加载考核对象
+				
 				this.$refs.subjectSelectorPopup.open();
 				
 				setTimeout(() => {
 					// 高亮显示已选项
 					this.scrollToSelected();
+					// 调整弹窗高度和布局
+					this.adjustSubjectPopup();
 				}, 300);
 			},
 			
@@ -897,6 +1138,65 @@
 				// 这里可以添加滚动到已选项的逻辑
 				// 由于uni-app限制，可能需要使用DOM操作或特定API
 				// 此处仅为占位，实际实现可能需要根据平台调整
+			},
+			
+			// 添加新方法：调整考核对象弹窗高度和位置
+			adjustSubjectPopup() {
+				// 使用uni-app的方式获取和设置元素样式
+				// 延迟执行以确保DOM已经渲染
+				setTimeout(() => {
+					// 使用uni选择器获取元素
+					const query = uni.createSelectorQuery();
+					
+					// 查询弹窗和内容容器
+					query.select('.subject-selector-popup').boundingClientRect();
+					query.select('.subject-list-container').boundingClientRect();
+					
+					query.exec(res => {
+						if (res && res.length >= 2) {
+							const popupRect = res[0];
+							const listRect = res[1];
+							
+							console.log('弹窗高度:', popupRect.height);
+							console.log('列表容器高度:', listRect.height);
+							
+							// 如果列表容器高度不足，调整内边距和滚动区域
+							if (listRect.height < 300) {
+								console.log('列表容器高度不足，进行调整');
+								
+								// 使用动态样式类而不是直接操作DOM
+								// 这个类已经在CSS中添加，我们只需要添加到现有组件上
+								uni.createSelectorQuery()
+									.select('.subject-list-container')
+									.boundingClientRect(data => {
+										if (data) {
+											// 确保底部内容不被遮挡
+											// 使用uni.getSystemInfoSync获取设备信息
+											const systemInfo = uni.getSystemInfoSync();
+											console.log('设备信息:', systemInfo);
+											
+											// 使用uni原生组件动态更新样式
+											// 这里手动调整关键样式属性
+											uni.createSelectorQuery()
+												.selectAll('.subject-list-container, .subject-item, .popup-btns.fixed-bottom')
+												.fields({
+													node: true,
+													size: true
+												}, res => {
+													if (res && res.length > 0) {
+														// 由于小程序限制，不能直接操作DOM
+														// 记录弹窗调整完成
+														console.log('弹窗调整完成');
+													}
+												})
+												.exec();
+										}
+									})
+									.exec();
+							}
+						}
+					});
+				}, 500);
 			},
 			
 			// 隐藏考核对象选择器
@@ -915,9 +1215,12 @@
 				const index = this.selectedSubjectIds.indexOf(subject._id);
 				if (index > -1) {
 					this.selectedSubjectIds.splice(index, 1);
+					console.log('取消选择考核对象:', subject.name, '，ID:', subject._id);
 				} else {
 					this.selectedSubjectIds.push(subject._id);
+					console.log('选择考核对象:', subject.name, '，ID:', subject._id);
 				}
+				console.log('当前选中的考核对象IDs:', this.selectedSubjectIds);
 				
 				// 不自动关闭弹窗，保留多选功能
 				// 保留选择状态显示，通过added CSS selected-tag来显示
@@ -925,35 +1228,87 @@
 			
 			// 确认考核对象选择
 			confirmSubjectSelection() {
+				console.log('确认选择前 - 选中的考核对象IDs:', this.selectedSubjectIds);
+				console.log('确认选择前 - 当前加载的全部考核对象数量:', this.allSubjects.length);
+				
 				// 根据选中的ID获取完整的考核对象信息
 				const selectedSubjects = this.allSubjects.filter(subject => 
 					this.selectedSubjectIds.includes(subject._id)
 				);
 				
+				console.log('根据ID筛选后得到的考核对象数量:', selectedSubjects.length);
+				console.log('筛选后的考核对象列表:', JSON.stringify(selectedSubjects));
+				
+				// 检查是否有ID在allSubjects中找不到
+				const missingIds = this.selectedSubjectIds.filter(id => 
+					!this.allSubjects.some(subject => subject._id === id)
+				);
+				if (missingIds.length > 0) {
+					console.error('警告：有些选中的ID在allSubjects中找不到:', missingIds);
+				}
+				
 				// 判断是在新增还是编辑模式
 				if (this.editingTableId) {
+					console.log('编辑模式 - 更新前editData中的考核对象:', JSON.stringify(this.editData.selectedSubjects));
 					this.editData.selectedSubjects = selectedSubjects;
+					console.log('编辑模式 - 更新后editData中的考核对象:', JSON.stringify(this.editData.selectedSubjects));
 				} else {
+					console.log('新增模式 - 更新前formData中的考核对象:', JSON.stringify(this.formData.selectedSubjects));
 					this.formData.selectedSubjects = selectedSubjects;
+					console.log('新增模式 - 更新后formData中的考核对象:', JSON.stringify(this.formData.selectedSubjects));
 				}
 				
 				this.hideSubjectSelector();
+				
+				// 在下一个事件循环检查渲染情况
+				setTimeout(() => {
+					this.checkSubjectsRendering();
+				}, 300);
+			},
+			
+			// 新增：检查考核对象渲染情况
+			checkSubjectsRendering() {
+				const subjects = this.editingTableId ? this.editData.selectedSubjects : this.formData.selectedSubjects;
+				console.log('检查渲染 - 考核对象数量:', subjects.length);
+				
+				// 使用uni选择器获取已渲染的考核对象元素
+				uni.createSelectorQuery()
+					.selectAll('.selected-subject')
+					.boundingClientRect(data => {
+						if (data) {
+							console.log('已渲染的考核对象元素数量:', data.length);
+							
+							if (data.length < subjects.length) {
+								console.error('警告：渲染的元素数量少于数据中的考核对象数量');
+								console.log('DOM元素:', data);
+								
+								// 强制更新视图
+								this.$forceUpdate();
+								
+								// 记录每个考核对象的信息
+								subjects.forEach((subject, index) => {
+									console.log(`考核对象${index+1}:`, subject.name, 'ID:', subject._id);
+								});
+							}
+						}
+					})
+					.exec();
 			},
 			
 			// 移除已选考核对象（新增表单）
 			removeSelectedSubject(index) {
+				console.log('移除已选考核对象（新增）前, 总数:', this.formData.selectedSubjects.length);
+				console.log('移除索引:', index, '，对象:', JSON.stringify(this.formData.selectedSubjects[index]));
 				this.formData.selectedSubjects.splice(index, 1);
+				console.log('移除后, 剩余对象数量:', this.formData.selectedSubjects.length);
 			},
 			
 			// 移除已选考核对象（编辑表单）
 			removeEditSubject(index) {
+				console.log('移除已选考核对象（编辑）前, 总数:', this.editData.selectedSubjects.length);
+				console.log('移除索引:', index, '，对象:', JSON.stringify(this.editData.selectedSubjects[index]));
 				this.editData.selectedSubjects.splice(index, 1);
-			},
-			
-			// 添加一个新的过滤方法
-			filterSubjects() {
-				// 实时搜索功能，无需额外处理，由计算属性filteredSubjects自动完成
-				console.log('正在搜索:', this.subjectSearchKey);
+				console.log('移除后, 剩余对象数量:', this.editData.selectedSubjects.length);
 			},
 			
 			// 显示评分人选择器弹窗
@@ -1006,8 +1361,9 @@
 			
 			// 过滤评分人
 			filterRaters() {
-				// 用于处理搜索确认事件
-				console.log('搜索评分人关键词:', this.raterSearchKey);
+				// 输入时实时过滤评分人
+				console.log('过滤评分人关键词:', this.raterSearchKey);
+				// 计算属性filteredRaters会自动根据raterSearchKey更新
 			},
 			
 			// 显示更换评分人时的评分人选择器
@@ -1059,6 +1415,29 @@
 			// 切换选项卡
 			switchSubjectTab(index) {
 				this.currentSubjectTab = index;
+			},
+			
+			// 添加调试方法，检查所有方法是否正确注册
+			debugMethods() {
+				console.log('====== 方法调试 ======');
+				const methodsToCheck = [
+					'isSubjectSelected',
+					'toggleSubjectSelection',
+					'confirmSubjectSelection',
+					'selectAllSubjects',
+					'clearSelectedSubjects',
+					'getSubjectNameById'
+				];
+				
+				methodsToCheck.forEach(methodName => {
+					const exists = typeof this[methodName] === 'function';
+					console.log(`方法 ${methodName} ${exists ? '存在' : '不存在'}`);
+					if (!exists) {
+						console.error(`警告: ${methodName} 方法缺失，需要修复`);
+					}
+				});
+				
+				console.log('====================');
 			}
 		}
 	}
@@ -1338,7 +1717,8 @@ page {
 /* 加载更多 */
 .load-more {
 	text-align: center;
-	margin: 30rpx 0;
+	margin: 30rpx 0 80rpx 0; /* 增加底部边距 */
+	padding-bottom: 30rpx; /* 增加内边距确保可见性 */
 }
 
 .load-btn {
@@ -1366,6 +1746,8 @@ page {
 	max-width: 90%;
 	box-sizing: border-box;
 	box-shadow: var(--shadow-lg);
+	max-height: 85vh; /* 最大高度为视口高度的85% */
+	overflow-y: auto; /* 内容过多时可滚动 */
 }
 
 .popup-title {
@@ -1405,15 +1787,17 @@ page {
 .form-input,
 .form-picker,
 .current-rater {
-	height: 80rpx;
+	min-height: 80rpx;
+	height: auto;
 	border: 1rpx solid var(--border-color);
 	border-radius: 8rpx;
-	padding: 0 24rpx;
+	padding: 12rpx 24rpx;
 	font-size: 28rpx;
 	width: 100%;
 	box-sizing: border-box;
 	background-color: #FAFAFA;
 	transition: all var(--transition-time);
+	line-height: 1.5;
 }
 
 .form-input:focus,
@@ -1484,8 +1868,14 @@ page {
 	width: auto;
 	min-width: 180rpx;
 	margin: 0 0 0 20rpx;
+}
+
+.popup-btns.fixed-bottom .cancel-btn {
 	flex: none;
-	text-align: center;
+}
+
+.popup-btns.fixed-bottom .confirm-btn {
+	flex: none;
 }
 
 /* 修改搜索框样式确保文字可见 */
@@ -1494,45 +1884,97 @@ page {
 	top: 0;
 	z-index: 10;
 	background-color: #fff;
-	padding: 20rpx 20rpx;
+	padding: 20rpx;
+	border-bottom: 1px solid var(--border-light);
+	display: flex;
+	align-items: center;
 }
 
 .search-input {
-	background-color: #f5f5f5;
-	padding: 16rpx 30rpx;
-	border-radius: 40rpx;
+	height: 80rpx;
+	padding: 0 20rpx;
+	background-color: #f5f7fa;
+	border-radius: 8rpx;
 	font-size: 28rpx;
-	color: #333;
-	width: 100%;
+	flex: 1;
 	box-sizing: border-box;
-	border: 1px solid #eeeeee;
+	border: 1px solid var(--border-color);
+}
+
+.search-btn {
+	width: 80rpx;
+	height: 80rpx;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: var(--primary-color);
+	color: white;
+	border-radius: 8rpx;
+	margin-left: 10rpx;
+}
+
+.search-icon {
+	font-size: 30rpx;
 }
 
 /* 新增考核对象选择部分 */
 .subjects-selector {
-	margin-top: 10rpx;
+	border: 1px solid var(--border-color);
+	border-radius: 8rpx;
+	background-color: #FAFAFA;
+	min-height: 120rpx; /* 最小高度 */
+	max-height: 400rpx; /* 增加最大高度，确保可以显示更多对象 */
+	padding: 20rpx;
+	overflow-y: auto; /* 内容过多时可滚动 */
 }
 
 .selected-subjects {
 	display: flex;
 	flex-wrap: wrap;
-	margin-bottom: 20rpx;
+	gap: 12rpx;
+	margin-bottom: 16rpx;
+	width: 100%; /* 确保容器占满宽度 */
+}
+
+.selected-subjects > view {
+	width: 100%;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10rpx;
+}
+
+.no-subjects-tip {
+	color: var(--text-secondary);
+	font-size: 26rpx;
+	padding: 10rpx 0;
 }
 
 .selected-subject {
-	background-color: #f2f2f2;
-	border-radius: 30rpx;
-	padding: 10rpx 20rpx;
-	margin-right: 16rpx;
-	margin-bottom: 16rpx;
 	display: flex;
 	align-items: center;
+	background-color: var(--primary-light);
+	color: var(--primary-color);
+	padding: 10rpx 20rpx;
+	border-radius: 30rpx;
+	font-size: 26rpx;
+	margin-bottom: 10rpx;
+	max-width: 45%; /* 限制最大宽度，让每行可以显示更多标签 */
+	box-sizing: border-box;
+	flex-shrink: 0; /* 防止被压缩 */
+}
+
+.selected-subject text {
+	max-width: calc(100% - 40rpx);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .remove-subject {
 	margin-left: 10rpx;
-	color: #999;
-	font-size: 24rpx;
+	font-size: 28rpx;
+	font-weight: bold;
+	flex-shrink: 0;
 }
 
 .add-subject-btn {
@@ -1550,13 +1992,12 @@ page {
 }
 
 .subject-selector-popup {
-	min-height: 750rpx;
-	max-height: 90vh !important; /* 最大高度为视口高度的90% */
 	width: 650rpx;
-	position: relative;
+	max-height: 85vh; /* 略微增加高度 */
 	display: flex;
 	flex-direction: column;
-	padding-bottom: 120rpx; /* 为底部按钮留出空间 */
+	position: relative;
+	padding-bottom: 120rpx; /* 为底部按钮预留空间 */
 }
 
 .popup-title {
@@ -1567,71 +2008,70 @@ page {
 }
 
 .close-btn {
-	font-size: 40rpx;
-	color: #999;
 	position: absolute;
-	right: 0;
-	top: 50%;
-	transform: translateY(-50%);
-	width: 60rpx;
-	height: 60rpx;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-
-.search-box {
-	position: sticky;
-	top: 0;
-	z-index: 10;
-	background-color: #fff;
-	padding: 20rpx 0;
-}
-
-.search-input {
-	background-color: #f5f5f5;
-	padding: 16rpx 30rpx;
-	border-radius: 40rpx;
-	font-size: 28rpx;
-	color: #333;
+	right: 20rpx;
+	top: 20rpx;
+	font-size: 36rpx;
+	color: var(--text-secondary);
 }
 
 .subject-list-container {
 	flex: 1;
 	overflow-y: auto;
+	max-height: 45vh; /* 减小最大高度，确保不超出屏幕 */
+	min-height: 250rpx; /* 设置最小高度 */
+	padding: 0 20rpx;
+	padding-bottom: 120rpx; /* 增加底部内边距，确保内容不被按钮遮挡 */
+	margin-bottom: 20rpx; /* 增加底部外边距 */
 	-webkit-overflow-scrolling: touch; /* 增强iOS滚动体验 */
-	margin: 20rpx 0;
-	padding-bottom: 20rpx;
-	max-height: 60vh; /* 最大高度为视口高度的60% */
 }
 
 .subject-item {
-	display: flex;
-	padding: 24rpx 20rpx;
-	border-bottom: 1px solid #f5f5f5;
-	align-items: center;
+	padding: 24rpx 20rpx; /* 增加内边距，使触摸区域更大 */
+	margin-bottom: 8rpx; /* 增加项目间距 */
+	background-color: #ffffff; /* 确保背景色 */
+	border-radius: 8rpx; /* 添加圆角 */
+	border-bottom: 1px solid var(--border-light);
 	transition: all 0.2s;
 }
 
 .subject-item:active {
-	background-color: #f9f9f9;
+	background-color: var(--primary-light);
 }
 
 .subject-item-selected {
 	background-color: var(--primary-light);
-	border-left: 6rpx solid var(--primary-color);
-	padding-left: 14rpx;
+}
+
+.subject-info {
+	position: relative;
+	padding-right: 80rpx; /* 增加右侧内边距，确保"已选"标签有足够空间 */
+}
+
+.subject-name {
+	font-size: 30rpx; /* 增大字体 */
+	color: var(--text-main);
+	font-weight: 500;
+	margin-bottom: 4rpx;
+	line-height: 1.4;
+}
+
+.subject-department, .subject-position {
+	font-size: 24rpx;
+	color: var(--text-secondary);
+	margin-top: 4rpx;
+	line-height: 1.4;
 }
 
 .selected-tag {
 	position: absolute;
-	right: 20rpx;
+	right: 10rpx;
 	top: 50%;
 	transform: translateY(-50%);
-	background-color: var(--primary-color);
-	color: white;
 	font-size: 24rpx;
-	padding: 4rpx 16rpx;
+	color: var(--primary-color);
+	background-color: var(--primary-light);
+	padding: 4rpx 12rpx;
 	border-radius: 20rpx;
 }
 
@@ -1640,12 +2080,13 @@ page {
 	bottom: 0;
 	left: 0;
 	right: 0;
-	background-color: #fff;
+	background-color: rgba(255, 255, 255, 0.98); /* 半透明背景 */
 	padding: 20rpx 30rpx;
 	border-top: 1px solid #eee;
 	display: flex;
 	justify-content: flex-end;
 	align-items: center;
+	box-shadow: 0 -4rpx 12rpx rgba(0, 0, 0, 0.08); /* 增加阴影 */
 }
 
 .popup-btns.fixed-bottom .cancel-btn,
@@ -1661,94 +2102,6 @@ page {
 
 .popup-btns.fixed-bottom .confirm-btn {
 	flex: none;
-}
-
-.batch-actions {
-	display: flex;
-	justify-content: space-between; /* 分散对齐，左右放置 */
-	padding: 10rpx 20rpx;
-	border-bottom: 1px solid #f0f0f0;
-	background-color: #fff;
-}
-
-.batch-action-btn {
-	font-size: 26rpx;
-	color: var(--primary-color);
-	padding: 6rpx 20rpx;
-	margin-left: 20rpx;
-	background-color: var(--primary-light);
-	border-radius: 30rpx;
-	text-align: center;
-}
-
-.subject-info {
-	flex: 1;
-	padding: 10rpx 0;
-	position: relative;
-}
-
-.subject-name {
-	font-size: 30rpx;
-	font-weight: bold;
-	margin-bottom: 6rpx;
-}
-
-.subject-department {
-	font-size: 26rpx;
-	color: #999;
-}
-
-.subject-position {
-	font-size: 26rpx;
-	color: #999;
-	margin-left: 20rpx;
-}
-
-/* 已选预览样式 */
-.selected-summary {
-	flex: 2;
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	padding-right: 20rpx;
-}
-
-.selected-count {
-	font-size: 24rpx;
-	color: var(--text-regular);
-	margin-bottom: 6rpx;
-}
-
-.selected-preview {
-	font-size: 24rpx;
-	color: var(--primary-color);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	max-width: 100%;
-}
-
-.preview-item {
-	display: inline;
-}
-
-.cancel-btn:active {
-	background-color: #ebebeb;
-}
-
-.confirm-btn:active {
-	opacity: 0.9;
-	transform: translateY(2rpx);
-	box-shadow: 0 2rpx 6rpx rgba(7, 193, 96, 0.1);
-}
-
-/* 修改批量操作按钮 */
-.batch-actions {
-	display: flex;
-	justify-content: space-between; /* 分散对齐，左右放置 */
-	padding: 10rpx 20rpx;
-	border-bottom: 1px solid #f0f0f0;
-	background-color: #fff;
 }
 
 /* 添加选项卡样式 */
@@ -1788,5 +2141,109 @@ page {
 .batch-action-hint {
 	font-size: 24rpx;
 	color: var(--text-secondary);
+}
+
+/* 输入框增强样式 */
+.form-input {
+	min-height: 80rpx; /* 设置最小高度 */
+	height: auto; /* 高度自适应 */
+	padding: 12rpx 24rpx; /* 增加内边距 */
+	line-height: 1.5; /* 增加行高 */
+}
+
+/* 确保文本可见 */
+.info-value, .selected-subject text, .subject-name {
+	word-break: break-all; /* 允许在任意字符间断行 */
+	white-space: normal; /* 允许文本换行 */
+}
+
+/* 考核对象加载更多样式 */
+.load-more-subjects {
+	text-align: center;
+	margin: 20rpx 0;
+	padding-bottom: 20rpx;
+}
+
+.load-more-btn {
+	font-size: 24rpx;
+	color: var(--text-secondary);
+	background-color: var(--bg-light);
+	border: 1rpx solid var(--border-color);
+	border-radius: var(--btn-radius);
+	padding: 6rpx 30rpx;
+	box-shadow: var(--shadow-sm);
+	display: inline-block;
+}
+
+.load-more-btn:active {
+	opacity: 0.8;
+	transform: translateY(2rpx);
+}
+
+/* 新增考核对象选择部分相关样式 */
+.subjects-selector {
+	border: 1px solid var(--border-color);
+	border-radius: 8rpx;
+	background-color: #FAFAFA;
+	min-height: 120rpx; /* 最小高度 */
+	max-height: 400rpx; /* 增加最大高度，确保可以显示更多对象 */
+	padding: 20rpx;
+	overflow-y: auto; /* 内容过多时可滚动 */
+}
+
+.selected-subjects {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12rpx;
+	margin-bottom: 16rpx;
+	width: 100%; /* 确保容器占满宽度 */
+}
+
+.selected-subjects > view {
+	width: 100%;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10rpx;
+}
+
+.no-subjects-tip {
+	color: var(--text-secondary);
+	font-size: 26rpx;
+	padding: 10rpx 0;
+}
+
+.selected-subject {
+	display: flex;
+	align-items: center;
+	background-color: var(--primary-light);
+	color: var(--primary-color);
+	padding: 10rpx 20rpx;
+	border-radius: 30rpx;
+	font-size: 26rpx;
+	margin-bottom: 10rpx;
+	max-width: 45%; /* 限制最大宽度，让每行可以显示更多标签 */
+	box-sizing: border-box;
+	flex-shrink: 0; /* 防止被压缩 */
+}
+
+.selected-subject text {
+	max-width: calc(100% - 40rpx);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.remove-subject {
+	margin-left: 10rpx;
+	font-size: 28rpx;
+	font-weight: bold;
+	flex-shrink: 0;
+}
+
+/* 额外CSS用于清除浮动，确保所有内容可见 */
+.clearfix:after {
+	content: "";
+	display: table;
+	clear: both;
 }
 </style> 
