@@ -30,30 +30,35 @@ exports.main = async (event, context) => {
 async function createSubject(data) {
   const { name, table_id, position, department } = data;
   
-  // 参数校验
-  if (!name || !table_id || !Array.isArray(table_id) || table_id.length === 0) {
+  // 参数校验，修改这里，只验证必填的name字段，允许table_id为空数组
+  if (!name) {
     return {
       code: -1,
-      msg: '缺少必要参数'
+      msg: '考核对象姓名不能为空'
     };
   }
   
+  // 确保table_id为数组类型
+  const tableIds = Array.isArray(table_id) ? table_id : [];
+  
   try {
-    // 检查评分表是否存在
-    for (const tableId of table_id) {
-      const tableInfo = await ratingTableCollection.doc(tableId).get();
-      if (tableInfo.data.length === 0) {
-        return {
-          code: -1,
-          msg: `评分表 ${tableId} 不存在`
-        };
+    // 如果有传评分表ID，则检查评分表是否存在
+    if (tableIds.length > 0) {
+      for (const tableId of tableIds) {
+        const tableInfo = await ratingTableCollection.doc(tableId).get();
+        if (tableInfo.data.length === 0) {
+          return {
+            code: -1,
+            msg: `评分表 ${tableId} 不存在`
+          };
+        }
       }
     }
     
     // 创建考核对象
     const result = await subjectCollection.add({
       name,
-      table_id,
+      table_id: tableIds, // 使用处理后的tableIds
       position: position || '',
       department: department || ''
     });
@@ -81,20 +86,19 @@ async function updateSubject(data) {
   try {
     // 如果更新了评分表，需要验证评分表是否存在
     if (updateData.table_id) {
-      if (!Array.isArray(updateData.table_id) || updateData.table_id.length === 0) {
-        return {
-          code: -1,
-          msg: '评分表ID不能为空'
-        };
-      }
+      // 确保table_id是数组类型
+      updateData.table_id = Array.isArray(updateData.table_id) ? updateData.table_id : [];
       
-      for (const tableId of updateData.table_id) {
-        const tableInfo = await ratingTableCollection.doc(tableId).get();
-        if (tableInfo.data.length === 0) {
-          return {
-            code: -1,
-            msg: `评分表 ${tableId} 不存在`
-          };
+      // 如果有评分表ID，则检查它们是否存在
+      if (updateData.table_id.length > 0) {
+        for (const tableId of updateData.table_id) {
+          const tableInfo = await ratingTableCollection.doc(tableId).get();
+          if (tableInfo.data.length === 0) {
+            return {
+              code: -1,
+              msg: `评分表 ${tableId} 不存在`
+            };
+          }
         }
       }
     }

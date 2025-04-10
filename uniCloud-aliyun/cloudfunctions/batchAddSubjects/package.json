@@ -1,0 +1,7 @@
+{
+  "name": "batchAddSubjects",
+  "version": "1.0.0",
+  "description": "批量添加考核对象",
+  "main": "index.js",
+  "dependencies": {}
+} 

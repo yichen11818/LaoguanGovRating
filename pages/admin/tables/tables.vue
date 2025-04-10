@@ -90,6 +90,24 @@
 						</view>
 					</picker>
 				</view>
+				
+				<!-- 新增考核对象选择部分 -->
+				<view class="form-item">
+					<text class="form-label">考核对象</text>
+					<view class="subjects-selector">
+						<view class="selected-subjects">
+							<view class="selected-subject" v-for="(subject, index) in formData.selectedSubjects" :key="index">
+								<text>{{subject.name}}</text>
+								<text class="remove-subject" @click="removeSelectedSubject(index)">×</text>
+							</view>
+						</view>
+						<view class="add-subject-btn" @click="showSubjectSelector">
+							<text class="add-icon">+</text>
+							<text>添加考核对象</text>
+						</view>
+					</view>
+				</view>
+				
 				<view class="popup-btns">
 					<button class="cancel-btn" size="mini" @click="hideAddTablePopup">取消</button>
 					<button class="confirm-btn" size="mini" @click="submitAddTable">确定</button>
@@ -118,6 +136,24 @@
 					<text class="form-label">分类</text>
 					<input v-model="editData.category" class="form-input" placeholder="请输入分类，如便民服务、党建办等" />
 				</view>
+				
+				<!-- 新增考核对象选择部分 -->
+				<view class="form-item">
+					<text class="form-label">考核对象</text>
+					<view class="subjects-selector">
+						<view class="selected-subjects">
+							<view class="selected-subject" v-for="(subject, index) in editData.selectedSubjects" :key="index">
+								<text>{{subject.name}}</text>
+								<text class="remove-subject" @click="removeEditSubject(index)">×</text>
+							</view>
+						</view>
+						<view class="add-subject-btn" @click="showEditSubjectSelector">
+							<text class="add-icon">+</text>
+							<text>添加考核对象</text>
+						</view>
+					</view>
+				</view>
+				
 				<view class="popup-btns">
 					<button class="cancel-btn" size="mini" @click="hideEditTablePopup">取消</button>
 					<button class="confirm-btn" size="mini" @click="submitEditTable">确定</button>
@@ -148,6 +184,38 @@
 				</view>
 			</view>
 		</uni-popup>
+		
+		<!-- 考核对象选择弹窗 -->
+		<uni-popup ref="subjectSelectorPopup" type="center">
+			<view class="popup-content subject-selector-popup">
+				<view class="popup-title">选择考核对象</view>
+				
+				<view class="search-box">
+					<input v-model="subjectSearchKey" class="search-input" placeholder="搜索考核对象" />
+				</view>
+				
+				<view class="subject-list-container">
+					<view class="subject-item" v-for="(subject, index) in filteredSubjects" :key="index">
+						<view class="subject-checkbox">
+							<checkbox :checked="isSubjectSelected(subject)" @click="toggleSubjectSelection(subject)" />
+						</view>
+						<view class="subject-info">
+							<text class="subject-name">{{subject.name}}</text>
+							<text class="subject-department" v-if="subject.department">{{subject.department}}</text>
+						</view>
+					</view>
+					
+					<view class="no-data" v-if="filteredSubjects.length === 0">
+						<text class="no-data-text">未找到匹配的考核对象</text>
+					</view>
+				</view>
+				
+				<view class="popup-btns">
+					<button class="cancel-btn" size="mini" @click="hideSubjectSelector">取消</button>
+					<button class="confirm-btn" size="mini" @click="confirmSubjectSelection">确定</button>
+				</view>
+			</view>
+		</uni-popup>
 	</view>
 </template>
 
@@ -174,7 +242,8 @@
 					name: '',
 					typeIndex: 1,
 					category: '',
-					rater: ''
+					rater: '',
+					selectedSubjects: []
 				},
 				
 				// 评分人列表
@@ -186,7 +255,8 @@
 					id: '',
 					name: '',
 					typeIndex: 1,
-					category: ''
+					category: '',
+					selectedSubjects: []
 				},
 				
 				// 更换评分人数据
@@ -194,12 +264,34 @@
 					tableId: '',
 					currentRater: '',
 					newRaterIndex: 0
+				},
+				
+				// 新增数据
+				allSubjects: [], // 所有考核对象
+				selectedSubjectIds: [], // 临时存储选中的考核对象ID
+				subjectSearchKey: '', // 考核对象搜索关键词
+				editingTableId: '' // 正在编辑的表ID
+			}
+		},
+		computed: {
+			// 过滤后的考核对象列表
+			filteredSubjects() {
+				if (!this.subjectSearchKey) {
+					return this.allSubjects;
 				}
+				
+				const key = this.subjectSearchKey.toLowerCase();
+				return this.allSubjects.filter(subject => {
+					return subject.name.toLowerCase().includes(key) || 
+						   (subject.department && subject.department.toLowerCase().includes(key)) ||
+						   (subject.position && subject.position.toLowerCase().includes(key));
+				});
 			}
 		},
 		onLoad() {
 			this.loadTables();
 			this.loadRaters();
+			this.loadAllSubjects(); // 加载所有考核对象
 		},
 		methods: {
 			// 获取评分表类型名称
@@ -312,7 +404,8 @@
 					name: '',
 					typeIndex: 1,
 					category: '',
-					rater: ''
+					rater: '',
+					selectedSubjects: []
 				};
 				this.currentRaterIndex = 0;
 				
@@ -371,7 +464,8 @@
 							name: this.formData.name,
 							type: type,
 							category: this.formData.category,
-							rater: this.formData.rater
+							rater: this.formData.rater,
+							selectedSubjects: this.formData.selectedSubjects
 						}
 					}
 				}).then(res => {
@@ -404,15 +498,42 @@
 			
 			// 编辑评分表
 			editTable(table) {
-				// 设置编辑数据
+				this.editingTableId = table._id;
 				this.editData = {
 					id: table._id,
 					name: table.name,
 					typeIndex: table.type,
-					category: table.category || ''
+					category: table.category || '',
+					selectedSubjects: []
 				};
 				
-				this.$refs.editTablePopup.open();
+				// 加载此表关联的考核对象
+				uni.showLoading({
+					title: '加载考核对象...'
+				});
+				
+				uniCloud.callFunction({
+					name: 'subject',
+					data: {
+						action: 'getSubjects',
+						data: {
+							table_id: table._id,
+							pageSize: 1000
+						}
+					}
+				}).then(res => {
+					uni.hideLoading();
+					
+					if (res.result.code === 0) {
+						this.editData.selectedSubjects = res.result.data.list || [];
+					}
+					
+					this.$refs.editTablePopup.open();
+				}).catch(err => {
+					uni.hideLoading();
+					console.error('加载考核对象失败:', err);
+					this.$refs.editTablePopup.open(); // 即使失败也打开弹窗
+				});
 			},
 			
 			// 隐藏编辑评分表弹窗
@@ -450,7 +571,8 @@
 							updateData: {
 								name: this.editData.name,
 								type: type,
-								category: this.editData.category
+								category: this.editData.category,
+								selectedSubjects: this.editData.selectedSubjects
 							}
 						}
 					}
@@ -618,6 +740,92 @@
 						icon: 'none'
 					});
 				});
+			},
+			
+			// 加载所有考核对象
+			loadAllSubjects() {
+				uni.showLoading({
+					title: '加载考核对象...'
+				});
+				
+				uniCloud.callFunction({
+					name: 'subject',
+					data: {
+						action: 'getSubjects',
+						data: {
+							pageSize: 1000 // 尝试获取所有考核对象
+						}
+					}
+				}).then(res => {
+					uni.hideLoading();
+					
+					if (res.result.code === 0) {
+						this.allSubjects = res.result.data.list || [];
+					}
+				}).catch(err => {
+					uni.hideLoading();
+					console.error('加载考核对象失败:', err);
+				});
+			},
+			
+			// 显示考核对象选择器
+			showSubjectSelector() {
+				this.selectedSubjectIds = this.formData.selectedSubjects.map(s => s._id);
+				this.$refs.subjectSelectorPopup.open();
+			},
+			
+			// 显示编辑时的考核对象选择器
+			showEditSubjectSelector() {
+				this.selectedSubjectIds = this.editData.selectedSubjects.map(s => s._id);
+				this.$refs.subjectSelectorPopup.open();
+			},
+			
+			// 隐藏考核对象选择器
+			hideSubjectSelector() {
+				this.$refs.subjectSelectorPopup.close();
+				this.subjectSearchKey = '';
+			},
+			
+			// 判断考核对象是否已选中
+			isSubjectSelected(subject) {
+				return this.selectedSubjectIds.includes(subject._id);
+			},
+			
+			// 切换考核对象选中状态
+			toggleSubjectSelection(subject) {
+				const index = this.selectedSubjectIds.indexOf(subject._id);
+				if (index > -1) {
+					this.selectedSubjectIds.splice(index, 1);
+				} else {
+					this.selectedSubjectIds.push(subject._id);
+				}
+			},
+			
+			// 确认考核对象选择
+			confirmSubjectSelection() {
+				// 根据选中的ID获取完整的考核对象信息
+				const selectedSubjects = this.allSubjects.filter(subject => 
+					this.selectedSubjectIds.includes(subject._id)
+				);
+				
+				// 判断是在新增还是编辑模式
+				if (this.editingTableId) {
+					this.editData.selectedSubjects = selectedSubjects;
+				} else {
+					this.formData.selectedSubjects = selectedSubjects;
+				}
+				
+				this.hideSubjectSelector();
+			},
+			
+			// 移除已选考核对象（新增表单）
+			removeSelectedSubject(index) {
+				this.formData.selectedSubjects.splice(index, 1);
+			},
+			
+			// 移除已选考核对象（编辑表单）
+			removeEditSubject(index) {
+				this.editData.selectedSubjects.splice(index, 1);
 			}
 		}
 	}
@@ -1032,5 +1240,94 @@ page {
 	opacity: 0.9;
 	transform: translateY(2rpx);
 	box-shadow: 0 2rpx 6rpx rgba(7, 193, 96, 0.1);
+}
+
+/* 新增考核对象选择部分 */
+.subjects-selector {
+	margin-top: 10rpx;
+}
+
+.selected-subjects {
+	display: flex;
+	flex-wrap: wrap;
+	margin-bottom: 20rpx;
+}
+
+.selected-subject {
+	background-color: #f2f2f2;
+	border-radius: 30rpx;
+	padding: 10rpx 20rpx;
+	margin-right: 16rpx;
+	margin-bottom: 16rpx;
+	display: flex;
+	align-items: center;
+}
+
+.remove-subject {
+	margin-left: 10rpx;
+	color: #999;
+	font-size: 24rpx;
+}
+
+.add-subject-btn {
+	display: flex;
+	align-items: center;
+	background-color: #f5f5f5;
+	padding: 16rpx 24rpx;
+	border-radius: 8rpx;
+	margin-top: 10rpx;
+}
+
+.add-icon {
+	font-size: 28rpx;
+	margin-right: 10rpx;
+}
+
+.subject-selector-popup {
+	min-height: 750rpx;
+	max-height: 900rpx;
+	width: 650rpx;
+}
+
+.search-box {
+	margin-bottom: 20rpx;
+}
+
+.search-input {
+	background-color: #f5f5f5;
+	padding: 16rpx;
+	border-radius: 8rpx;
+}
+
+.subject-list-container {
+	max-height: 500rpx;
+	overflow-y: auto;
+}
+
+.subject-item {
+	display: flex;
+	padding: 20rpx 0;
+	border-bottom: 1px solid #f5f5f5;
+}
+
+.subject-checkbox {
+	margin-right: 20rpx;
+	display: flex;
+	align-items: center;
+}
+
+.subject-info {
+	flex: 1;
+}
+
+.subject-name {
+	font-size: 30rpx;
+	font-weight: bold;
+	margin-bottom: 6rpx;
+}
+
+.subject-department {
+	font-size: 26rpx;
+	color: #999;
 }
 </style> 

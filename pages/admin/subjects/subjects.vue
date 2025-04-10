@@ -334,14 +334,6 @@
 					return;
 				}
 				
-				if (this.formData.selectedTables.length === 0) {
-					uni.showToast({
-						title: '请选择至少一个评分表',
-						icon: 'none'
-					});
-					return;
-				}
-				
 				uni.showLoading({
 					title: '提交中...'
 				});
@@ -437,14 +429,6 @@
 				if (!this.editData.name) {
 					uni.showToast({
 						title: '请输入考核对象姓名',
-						icon: 'none'
-					});
-					return;
-				}
-				
-				if (this.editData.selectedTables.length === 0) {
-					uni.showToast({
-						title: '请选择至少一个评分表',
 						icon: 'none'
 					});
 					return;

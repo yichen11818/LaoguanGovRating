@@ -9,7 +9,23 @@
 		</view>
 		
 		<view class="subject-selector">
-			<text class="section-title">选择考核对象</text>
+			<view class="selector-header">
+				<text class="section-title">考核对象</text>
+				<text class="progress-text">当前进度: {{currentSubjectIndex + 1}}/{{subjects.length}}</text>
+			</view>
+			
+			<scroll-view scroll-x="true" class="subject-tabs">
+				<view 
+					v-for="(subject, index) in subjects" 
+					:key="index"
+					class="subject-tab" 
+					:class="{'active': currentSubjectIndex === index}"
+					@click="switchToSubject(index)">
+					<text class="subject-name">{{subject.name}}</text>
+					<text class="subject-status" v-if="subjectRatingStatus[index]">已评</text>
+				</view>
+			</scroll-view>
+			
 			<picker @change="handleSubjectChange" :value="currentSubjectIndex" :range="subjectOptions" range-key="name">
 				<view class="picker-content">
 					<text class="picker-text">{{ currentSubject.name || '请选择考核对象' }}</text>
@@ -38,8 +54,12 @@
 			</view>
 			
 			<view class="btn-group">
+				<button class="prev-btn" @click="prevSubject" :disabled="currentSubjectIndex === 0">上一个</button>
 				<button class="save-btn" @click="handleSubmit">提交评分</button>
+				<button class="next-btn" @click="nextSubject" :disabled="currentSubjectIndex === subjects.length - 1">下一个</button>
 			</view>
+			
+			<button class="submit-all-btn" @click="submitAllRatings" v-if="hasUnsubmittedRatings">提交所有评分</button>
 		</view>
 		
 		<view class="no-subject" v-if="subjects.length === 0">
@@ -60,7 +80,10 @@
 				currentSubject: {},
 				scores: [],
 				comment: '',
-				existingRating: null
+				existingRating: null,
+				allScores: {},
+				subjectRatingStatus: [],
+				pendingSubmissions: []
 			}
 		},
 		computed: {
@@ -73,6 +96,9 @@
 						department: item.department
 					}
 				});
+			},
+			hasUnsubmittedRatings() {
+				return this.pendingSubmissions.length > 0;
 			}
 		},
 		onLoad(options) {
@@ -293,6 +319,18 @@
 							comment: this.comment,
 							total_score: this.calculateTotalScore()
 						};
+						
+						// 更新状态
+						this.$set(this.subjectRatingStatus, this.currentSubjectIndex, true);
+						
+						// 从待提交列表中移除
+						const index = this.pendingSubmissions.indexOf(this.currentSubject._id);
+						if (index > -1) {
+							this.pendingSubmissions.splice(index, 1);
+						}
+						
+						// 自动进入下一个未评分的对象
+						this.goToNextUnrated();
 					} else {
 						uni.showToast({
 							title: res.result.msg || '提交失败',
@@ -306,6 +344,99 @@
 						title: '提交失败，请检查网络',
 						icon: 'none'
 					});
+				});
+			},
+			switchToSubject(index) {
+				this.saveCurrentRating();
+				
+				this.currentSubjectIndex = index;
+				this.currentSubject = this.subjects[index];
+				
+				this.loadSubjectRating();
+			},
+			saveCurrentRating() {
+				if (!this.currentSubject._id) return;
+				
+				this.allScores[this.currentSubject._id] = [...this.scores];
+				
+				if (!this.pendingSubmissions.includes(this.currentSubject._id)) {
+					this.pendingSubmissions.push(this.currentSubject._id);
+				}
+			},
+			loadSubjectRating() {
+				if (this.allScores[this.currentSubject._id]) {
+					this.scores = [...this.allScores[this.currentSubject._id]];
+					return;
+				}
+				
+				this.initScores();
+				
+				this.loadExistingRating();
+			},
+			prevSubject() {
+				if (this.currentSubjectIndex > 0) {
+					this.switchToSubject(this.currentSubjectIndex - 1);
+				}
+			},
+			nextSubject() {
+				if (this.currentSubjectIndex < this.subjects.length - 1) {
+					this.switchToSubject(this.currentSubjectIndex + 1);
+				}
+			},
+			goToNextUnrated() {
+				for (let i = 0; i < this.subjects.length; i++) {
+					if (!this.subjectRatingStatus[i]) {
+						this.switchToSubject(i);
+						return;
+					}
+				}
+				uni.showToast({
+					title: '所有考核对象已评分完成',
+					icon: 'success'
+				});
+			},
+			submitAllRatings() {
+				uni.showLoading({
+					title: '批量提交中...'
+				});
+				
+				const promises = this.pendingSubmissions.map(subjectId => {
+					const subject = this.subjects.find(s => s._id === subjectId);
+					const scores = this.allScores[subjectId];
+					
+					return uniCloud.callFunction({
+						name: 'rating',
+						data: {
+							action: 'submitRating',
+							data: {
+								table_id: this.tableId,
+								rater: uni.getStorageSync('username'),
+								subject: subject.name,
+								scores: scores
+							}
+						}
+					});
+				});
+				
+				Promise.all(promises).then(results => {
+					uni.hideLoading();
+					
+					const successCount = results.filter(res => res.result.code === 0).length;
+					
+					this.pendingSubmissions = [];
+					this.subjectRatingStatus = this.subjects.map(() => true);
+					
+					uni.showToast({
+						title: `成功提交${successCount}条评分`,
+						icon: 'success'
+					});
+				}).catch(err => {
+					uni.hideLoading();
+					uni.showToast({
+						title: '批量提交失败',
+						icon: 'none'
+					});
+					console.error(err);
 				});
 			}
 		}
@@ -363,6 +494,52 @@
 		padding: 30rpx;
 		margin-bottom: 30rpx;
 		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+	}
+	
+	.selector-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 10px;
+	}
+	
+	.progress-text {
+		font-size: 14px;
+		color: #666;
+	}
+	
+	.subject-tabs {
+		white-space: nowrap;
+		margin-bottom: 15px;
+	}
+	
+	.subject-tab {
+		display: inline-block;
+		padding: 8px 15px;
+		margin-right: 10px;
+		background-color: #f2f2f2;
+		border-radius: 20px;
+		position: relative;
+	}
+	
+	.subject-tab.active {
+		background-color: #07c160;
+		color: white;
+	}
+	
+	.subject-name {
+		font-size: 14px;
+	}
+	
+	.subject-status {
+		position: absolute;
+		right: -5px;
+		top: -5px;
+		background-color: #ff7043;
+		color: white;
+		font-size: 10px;
+		padding: 2px 5px;
+		border-radius: 10px;
 	}
 	
 	.picker-content {
@@ -438,14 +615,25 @@
 	}
 	
 	.btn-group {
-		margin-top: 40rpx;
+		display: flex;
+		justify-content: space-between;
+		margin-top: 20px;
+	}
+	
+	.prev-btn, .next-btn {
+		width: 30%;
+		font-size: 14px;
+		background-color: #f2f2f2;
 	}
 	
 	.save-btn {
-		background-color: #07c160;
-		color: #fff;
-		height: 90rpx;
-		line-height: 90rpx;
+		width: 35%;
+	}
+	
+	.submit-all-btn {
+		margin-top: 15px;
+		background-color: #1976d2;
+		color: white;
 	}
 	
 	.no-subject {

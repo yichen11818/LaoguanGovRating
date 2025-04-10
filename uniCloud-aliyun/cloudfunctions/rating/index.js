@@ -26,6 +26,8 @@ exports.main = async (event, context) => {
       return await getRatingStats(data);
     case 'getRaterStats':
       return await getRaterStats(data, context);
+    case 'getTableRatings':
+      return await getTableRatings(data);
     default:
       return {
         code: -1,
@@ -506,6 +508,63 @@ async function getRaterStats(data, context) {
     return {
       code: -1,
       msg: '获取评分统计失败',
+      error: e.message
+    };
+  }
+}
+
+// 获取评分表的所有评分结果（按考核对象分组）
+async function getTableRatings(data) {
+  const { tableId } = data;
+  
+  try {
+    // 获取评分表信息
+    const tableInfo = await ratingTableCollection.doc(tableId).get();
+    if (tableInfo.data.length === 0) {
+      return {
+        code: -1,
+        msg: '评分表不存在'
+      };
+    }
+    
+    // 获取所有相关考核对象
+    const subjects = await subjectCollection.where({
+      table_id: db.command.in([tableId])
+    }).get();
+    
+    // 获取所有评分记录
+    const ratings = await ratingCollection.where({
+      table_id: tableId
+    }).get();
+    
+    // 按考核对象分组
+    const subjectMap = {};
+    subjects.data.forEach(subject => {
+      subjectMap[subject.name] = {
+        subject: subject,
+        ratings: []
+      };
+    });
+    
+    // 填充评分数据
+    ratings.data.forEach(rating => {
+      if (subjectMap[rating.subject]) {
+        subjectMap[rating.subject].ratings.push(rating);
+      }
+    });
+    
+    return {
+      code: 0,
+      msg: '获取评分数据成功',
+      data: {
+        table: tableInfo.data[0],
+        subjects: subjectMap
+      }
+    };
+  } catch (e) {
+    return {
+      code: -1,
+      msg: '获取评分数据失败',
       error: e.message
     };
   }
