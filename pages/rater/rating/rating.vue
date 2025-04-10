@@ -22,13 +22,17 @@
 					:class="{'active': currentSubjectIndex === index}"
 					@click="switchToSubject(index)">
 					<text class="subject-name">{{subject.name}}</text>
+					<text class="subject-score" v-if="getSubjectTotalScore(subject._id)">{{getSubjectTotalScore(subject._id)}}分</text>
 					<text class="subject-status" v-if="subjectRatingStatus[index]">已评</text>
 				</view>
 			</scroll-view>
 			
 			<picker @change="handleSubjectChange" :value="currentSubjectIndex" :range="subjectOptions" range-key="name">
 				<view class="picker-content">
-					<text class="picker-text">{{ currentSubject.name || '请选择考核对象' }}</text>
+					<view class="picker-left">
+						<text class="picker-text">{{ currentSubject.name || '请选择考核对象' }}</text>
+						<text class="picker-score" v-if="getSubjectTotalScore(currentSubject._id)">{{getSubjectTotalScore(currentSubject._id)}}分</text>
+					</view>
 					<text class="picker-arrow">▼</text>
 				</view>
 			</picker>
@@ -757,6 +761,25 @@
 					// 出错时也要加载当前考核对象
 					this.loadExistingRating();
 				});
+			},
+			// 获取考核对象的总分
+			getSubjectTotalScore(subjectId) {
+				if (!subjectId) return null;
+				
+				// 如果已有缓存的评分数据
+				if (this.allScores[subjectId]) {
+					// 从缓存中获取总分
+					const scores = this.allScores[subjectId];
+					if (scores && scores.length > 0) {
+						const totalScore = scores.reduce((total, item) => {
+							return total + parseInt(item.score || 0);
+						}, 0);
+						return totalScore || null;
+					}
+				}
+				
+				// 如果没有缓存数据，返回null
+				return null;
 			}
 		}
 	}
@@ -850,6 +873,17 @@
 		font-size: 14px;
 	}
 	
+	.subject-score {
+		position: absolute;
+		right: -5px;
+		bottom: -5px;
+		background-color: #2196f3;
+		color: white;
+		font-size: 10px;
+		padding: 2px 5px;
+		border-radius: 10px;
+	}
+	
 	.subject-status {
 		position: absolute;
 		right: -5px;
@@ -871,9 +905,22 @@
 		padding: 0 20rpx;
 	}
 	
+	.picker-left {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+	}
+	
 	.picker-text {
 		font-size: 30rpx;
 		color: #333;
+	}
+	
+	.picker-score {
+		margin-left: 10rpx;
+		font-size: 24rpx;
+		color: #2196f3;
+		font-weight: bold;
 	}
 	
 	.picker-arrow {
