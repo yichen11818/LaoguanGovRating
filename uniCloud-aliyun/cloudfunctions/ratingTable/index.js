@@ -110,25 +110,45 @@ async function createTable(data) {
     if (selectedSubjects && selectedSubjects.length > 0) {
       console.log(`关联${selectedSubjects.length}个考核对象到评分表${result.id}`);
       
-      // 准备批量添加的考核对象数据
-      const subjectsToAdd = selectedSubjects.map(subject => {
-        // 创建新对象避免修改原始数据
-        const newSubject = { ...subject };
-        
-        // 确保有table_id字段关联到评分表
-        newSubject.table_id = result.id;
-        
-        // 如果考核对象有_id字段但是来自前端选择，需要移除_id以便数据库生成新ID
-        if (newSubject._id && !newSubject._id.includes('_')) {
-          delete newSubject._id;
+      // 遍历处理每个考核对象
+      for (const subject of selectedSubjects) {
+        if (!subject._id) {
+          // 如果没有ID，这是一个新考核对象，需要创建
+          await subjectCollection.add({
+            name: subject.name,
+            department: subject.department || '',
+            position: subject.position || '',
+            table_id: [result.id]
+          });
+          console.log(`创建了新考核对象: ${subject.name}`);
+        } else {
+          // 有ID，这是一个现有考核对象，更新其关联
+          // 首先获取当前关联
+          const existingSubject = await subjectCollection.doc(subject._id).get();
+          
+          if (existingSubject.data.length > 0) {
+            // 确保table_id是数组
+            let tableIds = existingSubject.data[0].table_id || [];
+            if (!Array.isArray(tableIds)) {
+              tableIds = [tableIds];
+            }
+            
+            // 如果不包含当前表ID，则添加
+            if (!tableIds.includes(result.id)) {
+              tableIds.push(result.id);
+            }
+            
+            // 更新考核对象
+            await subjectCollection.doc(subject._id).update({
+              table_id: tableIds
+            });
+            
+            console.log(`已更新考核对象 ${subject.name}(${subject._id}) 的评分表关联`);
+          } else {
+            console.log(`警告: 未找到ID为 ${subject._id} 的考核对象`);
+          }
         }
-        
-        return newSubject;
-      });
-      
-      // 批量添加考核对象到subjects集合
-      const addResult = await subjectCollection.add(subjectsToAdd);
-      console.log('添加考核对象结果:', addResult);
+      }
     }
     
     return {
@@ -163,61 +183,68 @@ async function updateTable(data) {
     if (selectedSubjects && Array.isArray(selectedSubjects)) {
       console.log(`处理评分表${tableId}的考核对象关联，共${selectedSubjects.length}个对象`);
       
-      // 获取当前关联的考核对象
+      // 先移除该评分表的所有考核对象关联
+      // 注意：不是删除考核对象，而是解除它们与当前评分表的关联
       const currentSubjects = await subjectCollection.where({
-        table_id: tableId
+        table_id: db.command.all([tableId])
       }).get();
       
-      // 当前关联的考核对象ID集合
-      const currentSubjectIds = currentSubjects.data.map(s => s._id);
-      console.log('当前关联的考核对象IDs:', currentSubjectIds);
+      console.log('当前关联到此评分表的考核对象数量:', currentSubjects.data.length);
       
-      // 新提交的考核对象ID集合
-      const newSubjectIds = selectedSubjects.map(s => s._id).filter(id => id);
-      console.log('新提交的考核对象IDs:', newSubjectIds);
-      
-      // 需要删除的考核对象（在当前列表中但不在新列表中）
-      const subjectsToDelete = currentSubjects.data.filter(s => 
-        !newSubjectIds.includes(s._id)
-      );
-      
-      // 需要新增的考核对象（在新列表中但不在当前列表中）
-      const subjectsToAdd = selectedSubjects.filter(s => 
-        !s._id || !currentSubjectIds.includes(s._id)
-      );
-      
-      console.log(`需要删除${subjectsToDelete.length}个考核对象，需要新增${subjectsToAdd.length}个考核对象`);
-      
-      // 删除不再关联的考核对象
-      if (subjectsToDelete.length > 0) {
-        const deleteIds = subjectsToDelete.map(s => s._id);
-        const deleteResult = await subjectCollection.where({
-          _id: db.command.in(deleteIds)
-        }).remove();
-        console.log('删除考核对象结果:', deleteResult);
-      }
-      
-      // 添加新关联的考核对象
-      if (subjectsToAdd.length > 0) {
-        // 准备批量添加的考核对象数据
-        const subjectsData = subjectsToAdd.map(subject => {
-          // 创建新对象避免修改原始数据
-          const newSubject = { ...subject };
-          
-          // 确保有table_id字段关联到评分表
-          newSubject.table_id = tableId;
-          
-          // 如果考核对象有_id字段但是来自前端选择，需要移除_id以便数据库生成新ID
-          if (newSubject._id && !newSubject._id.includes('_')) {
-            delete newSubject._id;
-          }
-          
-          return newSubject;
+      // 对于每个当前关联的考核对象，移除表ID关联
+      for (const subject of currentSubjects.data) {
+        // 确保table_id是数组
+        const tableIds = Array.isArray(subject.table_id) ? subject.table_id : [subject.table_id];
+        
+        // 从表ID数组中移除当前表ID
+        const updatedTableIds = tableIds.filter(id => id !== tableId);
+        
+        // 更新考核对象
+        await subjectCollection.doc(subject._id).update({
+          table_id: updatedTableIds
         });
         
-        // 批量添加考核对象到subjects集合
-        const addResult = await subjectCollection.add(subjectsData);
-        console.log('添加考核对象结果:', addResult);
+        console.log(`已从考核对象 ${subject.name}(${subject._id}) 中移除评分表关联`);
+      }
+      
+      // 然后添加新关联
+      for (const subject of selectedSubjects) {
+        if (!subject._id) {
+          // 如果没有ID，这是一个新考核对象，需要创建
+          await subjectCollection.add({
+            name: subject.name,
+            department: subject.department || '',
+            position: subject.position || '',
+            table_id: [tableId]
+          });
+          console.log(`创建了新考核对象: ${subject.name}`);
+        } else {
+          // 有ID，这是一个现有考核对象，更新其关联
+          // 首先获取当前关联
+          const existingSubject = await subjectCollection.doc(subject._id).get();
+          
+          if (existingSubject.data.length > 0) {
+            // 确保table_id是数组
+            let tableIds = existingSubject.data[0].table_id || [];
+            if (!Array.isArray(tableIds)) {
+              tableIds = [tableIds];
+            }
+            
+            // 如果不包含当前表ID，则添加
+            if (!tableIds.includes(tableId)) {
+              tableIds.push(tableId);
+            }
+            
+            // 更新考核对象
+            await subjectCollection.doc(subject._id).update({
+              table_id: tableIds
+            });
+            
+            console.log(`已更新考核对象 ${subject.name}(${subject._id}) 的评分表关联`);
+          } else {
+            console.log(`警告: 未找到ID为 ${subject._id} 的考核对象`);
+          }
+        }
       }
     }
     
@@ -270,10 +297,32 @@ async function deleteTable(data) {
     // 删除评分表
     await ratingTableCollection.doc(tableId).remove();
     
-    // 删除关联的考核对象
-    await subjectCollection.where({
-      table_id: tableId
-    }).remove();
+    // 处理关联的考核对象，不是直接删除，而是解除关联
+    const subjects = await subjectCollection.where({
+      table_id: db.command.all([tableId])
+    }).get();
+    
+    console.log(`找到${subjects.data.length}个与评分表${tableId}关联的考核对象`);
+    
+    for (const subject of subjects.data) {
+      // 确保table_id是数组
+      const tableIds = Array.isArray(subject.table_id) ? subject.table_id : [subject.table_id];
+      
+      // 从表ID数组中移除当前表ID
+      const updatedTableIds = tableIds.filter(id => id !== tableId);
+      
+      if (updatedTableIds.length === 0) {
+        // 如果没有其他关联的评分表，则删除该考核对象
+        await subjectCollection.doc(subject._id).remove();
+        console.log(`已删除考核对象: ${subject.name}(${subject._id})`);
+      } else {
+        // 否则只是解除与当前评分表的关联
+        await subjectCollection.doc(subject._id).update({
+          table_id: updatedTableIds
+        });
+        console.log(`已从考核对象 ${subject.name}(${subject._id}) 中移除评分表关联`);
+      }
+    }
     
     return {
       code: 0,

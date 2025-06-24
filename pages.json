@@ -31,6 +31,12 @@
 					}
 				},
 				{
+					"path": "tables/years",
+					"style": {
+						"navigationBarTitleText": "评分表年份分类"
+					}
+				},
+				{
 					"path": "items/items",
 					"style": {
 						"navigationBarTitleText": "评分项管理"

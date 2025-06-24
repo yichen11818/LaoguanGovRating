@@ -1,6 +1,11 @@
 <template>
 	<view class="container">
 		<view class="filter-bar">
+			<view class="filter-item" v-if="yearFilter">
+				<button class="back-btn" @click="goBackToYears">
+					<text>返回年份</text>
+				</button>
+			</view>
 			<view class="filter-item">
 				<picker @change="handleTypeChange" :value="currentTypeIndex" :range="typeOptions" range-key="name">
 					<view class="picker-box">
@@ -31,6 +36,9 @@
 					<view class="table-actions">
 						<view class="action-btn edit" @click.stop="editTable(table)">
 							<text class="action-icon">✏️</text>
+						</view>
+						<view class="action-btn delete" @click.stop="confirmDelete(table._id)">
+							<text class="action-icon">🗑️</text>
 						</view>
 					</view>
 				</view>
@@ -219,11 +227,10 @@
 				<!-- 搜索框 -->
 				<view class="search-box">
 					<input 
-						:value="subjectSearchKey" 
+						v-model="subjectSearchKey" 
 						class="search-input" 
 						placeholder="搜索考核对象" 
 						confirm-type="search" 
-						@input="handleSearchInput" 
 						@confirm="filterSubjects" 
 						focus 
 					/>
@@ -330,6 +337,7 @@
 	export default {
 		data() {
 			return {
+				tables: [],
 				currentTypeIndex: 0,
 				typeOptions: [
 					{ id: 0, name: '全部类型' },
@@ -391,8 +399,27 @@
 				subjectSearching: false, // 是否在搜索中
 				editingTableId: '', // 正在编辑的表ID
 				selectingMode: '', // 评分人选择器的模式: 'add'新增表单, 'edit'编辑表单
-				currentSubjectTab: 0 // 当前选中的选项卡索引
+				currentSubjectTab: 0, // 当前选中的选项卡索引
+				yearFilter: '' // 添加年份筛选参数
 			}
+		},
+		onLoad(options) {
+			// 检查是否有年份参数
+			if (options.year) {
+				this.yearFilter = options.year;
+				uni.setNavigationBarTitle({
+					title: `${options.year}年评分表`
+				});
+			}
+		},
+		onShow() {
+			// 初始加载数据
+			this.tables = [];
+			this.currentPage = 1;
+			this.hasMoreData = true;
+			this.loadData();
+			this.loadRaters();
+			this.loadSubjects();
 		},
 		computed: {
 			// 过滤后的考核对象列表
@@ -420,6 +447,15 @@
 			}
 		},
 		onLoad() {
+			// 确保搜索关键词是字符串
+			if (typeof this.subjectSearchKey !== 'string') {
+				console.log('重置非字符串搜索关键词:', this.subjectSearchKey);
+				this.subjectSearchKey = '';
+			}
+			
+			// 设置全局的加载保护
+			let initLoadingShown = false;
+			
 			// 先加载评分人列表，然后再加载表格数据
 			this.loadRaters().then(() => {
 				this.loadTables();
@@ -428,13 +464,19 @@
 				this.loadTables(); // 即使加载评分人失败，也加载表格
 			});
 			
-			this.loadAllSubjects(); // 加载所有考核对象
-			
-			// 确保搜索关键词是字符串
-			if (typeof this.subjectSearchKey !== 'string') {
-				console.log('重置非字符串搜索关键词:', this.subjectSearchKey);
-				this.subjectSearchKey = '';
-			}
+			// 在组件初始化时，延迟加载考核对象，避免与表格数据加载冲突
+			setTimeout(() => {
+				try {
+					// 初始化时仅加载第一页，不显示加载弹窗
+					this.loadInitialSubjects();
+				} catch (err) {
+					console.error('初始加载考核对象失败:', err);
+					// 确保任何加载框都被关闭
+					if (initLoadingShown) {
+						uni.hideLoading();
+					}
+				}
+			}, 1000);
 			
 			// 调试方法检查
 			this.debugMethods();
@@ -465,59 +507,68 @@
 				this.loadTables();
 			},
 			
-			// 加载评分表
-			loadTables() {
+			// 修改loadData方法，增加对年份的筛选
+			loadData() {
+				if (this.isLoading) return;
 				this.isLoading = true;
 				console.log('开始加载评分表，当前评分人列表数量:', this.raters.length);
 				
-				const type = this.typeOptions[this.currentTypeIndex].id;
+				const typeValue = this.typeOptions[this.currentTypeIndex].id;
 				
 				uniCloud.callFunction({
 					name: 'ratingTable',
 					data: {
 						action: 'getTables',
 						data: {
-							type: type > 0 ? type : undefined,
-							page: this.page,
-							pageSize: this.pageSize
+							type: typeValue,
+							page: this.currentPage,
+							pageSize: 10,
+							keyword: this.searchKeyword
 						}
 					}
 				}).then(res => {
-					this.isLoading = false;
-					
 					if (res.result.code === 0) {
-						const data = res.result.data;
+						let tables = res.result.data;
 						
-						if (this.page === 1) {
-							this.tables = data.list;
-						} else {
-							this.tables = this.tables.concat(data.list);
-						}
-						
-						this.total = data.total;
-						this.hasMoreData = this.tables.length < this.total;
-						
-						// 打印第一个表格的评分人信息
-						if (this.tables.length > 0) {
-							const firstTable = this.tables[0];
-							console.log('第一个表格评分人:', {
-								rater: firstTable.rater,
-								displayName: this.getRaterName(firstTable.rater)
+						// 如果有年份筛选，则过滤表格
+						if (this.yearFilter) {
+							tables = tables.filter(table => {
+								// 从表名中提取年份
+								const yearRegex = new RegExp(this.yearFilter);
+								const nameMatch = table.name.match(yearRegex);
+								
+								// 从创建时间中提取年份
+								let createTimeMatch = false;
+								if (table.create_time) {
+									const createYear = new Date(table.create_time).getFullYear().toString();
+									createTimeMatch = createYear === this.yearFilter;
+								}
+								
+								return nameMatch || createTimeMatch;
 							});
 						}
+						
+						if (this.currentPage === 1) {
+							this.tables = tables;
+						} else {
+							this.tables = [...this.tables, ...tables];
+						}
+						
+						this.hasMoreData = tables.length === 10;
 					} else {
 						uni.showToast({
-							title: res.result.msg || '加载失败',
+							title: '获取数据失败',
 							icon: 'none'
 						});
 					}
-				}).catch(err => {
 					this.isLoading = false;
+				}).catch(err => {
 					console.error(err);
 					uni.showToast({
-						title: '加载失败，请检查网络',
+						title: '获取数据失败',
 						icon: 'none'
 					});
+					this.isLoading = false;
 				});
 			},
 			
@@ -525,8 +576,8 @@
 			loadMore() {
 				if (this.isLoading || !this.hasMoreData) return;
 				
-				this.page++;
-				this.loadTables();
+				this.currentPage++;
+				this.loadData();
 			},
 			
 			// 加载评分人列表
@@ -576,7 +627,8 @@
 				// 重置表单
 				this.formData = {
 					name: '',
-					typeIndex: 1,
+					typeIndex: 0,
+					type: 'all',
 					category: '',
 					rater: '',
 					selectedSubjects: []
@@ -656,8 +708,8 @@
 						});
 						
 						this.hideAddTablePopup();
-						this.page = 1;
-						this.loadTables();
+						this.currentPage = 1;
+						this.loadData();
 					} else {
 						uni.showToast({
 							title: res.result.msg || '创建失败',
@@ -678,9 +730,10 @@
 			editTable(table) {
 				this.editingTableId = table._id;
 				this.editData = {
-					id: table._id,
+					_id: table._id,
 					name: table.name,
 					typeIndex: table.type,
+					type: table.type,
 					category: table.category || '',
 					selectedSubjects: [],
 					rater: table.rater
@@ -755,7 +808,7 @@
 					data: {
 						action: 'updateTable',
 						data: {
-							tableId: this.editData.id,
+							tableId: this.editData._id,
 							updateData: {
 								name: this.editData.name,
 								type: type,
@@ -775,7 +828,7 @@
 						});
 						
 						this.hideEditTablePopup();
-						this.loadTables();
+						this.loadData();
 					} else {
 						uni.showToast({
 							title: res.result.msg || '更新失败',
@@ -848,7 +901,7 @@
 					}
 				}).then(res => {
 					this.hideChangeRaterPopup();
-					this.loadTables();
+					this.loadData();
 					uni.hideLoading();
 					uni.showToast({
 						title: '评分人更换成功'
@@ -864,9 +917,17 @@
 			
 			// 确认删除
 			confirmDelete(tableId) {
+				// 获取要删除的表信息
+				const table = this.tables.find(t => t._id === tableId);
+				if (!table) return;
+				
+				// 获取表名称，用于提示信息
+				const tableName = table.name;
+				
 				uni.showModal({
 					title: '确认删除',
-					content: '删除后将无法恢复，是否继续？',
+					content: `您确定要删除评分表"${tableName}"吗？删除后将无法恢复，并且会解除与所有考核对象的关联关系。`,
+					confirmColor: '#ff4d4f',
 					success: res => {
 						if (res.confirm) {
 							this.deleteTable(tableId);
@@ -900,9 +961,9 @@
 						
 						// 更新列表
 						this.tables = this.tables.filter(item => item._id !== tableId);
-						if (this.tables.length === 0 && this.page > 1) {
-							this.page--;
-							this.loadTables();
+						if (this.tables.length === 0 && this.currentPage > 1) {
+							this.currentPage--;
+							this.loadData();
 						}
 					} else {
 						uni.showToast({
@@ -931,10 +992,25 @@
 				
 				this.isLoadingSubjects = true;
 				
+				// 添加超时保护机制
+				let loadingTimer = null;
+				
 				if (this.subjectPage === 1) {
 					uni.showLoading({
 						title: '加载考核对象...'
 					});
+					
+					// 设置超时保护，最长10秒
+					loadingTimer = setTimeout(() => {
+						console.log('加载考核对象超时，自动隐藏加载框');
+						uni.hideLoading();
+						this.isLoadingSubjects = false;
+						
+						uni.showToast({
+							title: '加载超时，请重试',
+							icon: 'none'
+						});
+					}, 10000); // 10秒超时
 				}
 				
 				// 使用关键词搜索
@@ -960,6 +1036,12 @@
 				}).then(res => {
 					this.isLoadingSubjects = false;
 					
+					// 清除超时保护定时器
+					if (loadingTimer) {
+						clearTimeout(loadingTimer);
+						loadingTimer = null;
+					}
+					
 					if (this.subjectPage === 1) {
 						uni.hideLoading();
 					}
@@ -969,7 +1051,7 @@
 						console.log(`获取考核对象成功: 共${data.total}条, 当前第${data.page}页, 每页${data.pageSize}条`);
 						
 						if (data.keyword) {
-							console.log(`搜索关键词: "${data.keyword}", 结果数量: ${data.list.length}`);
+							console.log(`搜索关键词: "${data.keyword}", 结果: ${JSON.stringify(data.list)}`);
 						}
 						
 						if (this.subjectPage === 1) {
@@ -1007,6 +1089,12 @@
 				}).catch(err => {
 					this.isLoadingSubjects = false;
 					
+					// 清除超时保护定时器
+					if (loadingTimer) {
+						clearTimeout(loadingTimer);
+						loadingTimer = null;
+					}
+					
 					if (this.subjectPage === 1) {
 						uni.hideLoading();
 					}
@@ -1031,20 +1119,39 @@
 			handleSearchInput(event) {
 				try {
 					console.log('搜索框输入事件:', event);
-					const value = event.target ? event.target.value : event.detail.value;
+					
+					// 修复：处理不同平台的事件对象格式
+					let value;
+					
+					// 针对微信小程序等环境的特殊处理
+					if (event && event.detail) {
+						value = event.detail.value;
+					} else if (event && event.target) {
+						value = event.target.value;
+					}
+					
 					console.log('输入值类型:', typeof value, '值:', value);
 					
 					// 确保值是字符串
 					if (typeof value === 'string') {
 						this.subjectSearchKey = value;
-					} else if (value && value.toString) {
+					} else if (value === undefined || value === null) {
+						// 明确处理undefined和null的情况
+						this.subjectSearchKey = '';
+						console.log('输入值为空，已重置为空字符串');
+					} else if (value && typeof value.toString === 'function') {
 						// 尝试转换为字符串
-						this.subjectSearchKey = value.toString();
-						console.log('搜索值转换为字符串:', this.subjectSearchKey);
+						try {
+							this.subjectSearchKey = value.toString();
+							console.log('搜索值转换为字符串:', this.subjectSearchKey);
+						} catch (e) {
+							this.subjectSearchKey = '';
+							console.error('转换为字符串失败:', e);
+						}
 					} else {
 						// 重置为空字符串
 						this.subjectSearchKey = '';
-						console.error('输入值无法转换为字符串');
+						console.error('输入值无法转换为字符串(env:', uni.getSystemInfoSync().platform + ',' + uni.getSystemInfoSync().uniPlatform + ',' + uni.getSystemInfoSync().version + '; lib: ' + uni.getSystemInfoSync().SDKVersion + ')');
 					}
 				} catch (err) {
 					console.error('处理搜索输入错误:', err);
@@ -1057,9 +1164,9 @@
 				try {
 					console.log('执行搜索, 事件对象类型:', typeof e, '搜索关键词:', this.subjectSearchKey);
 					
-					// 防止搜索框中显示错误对象
-					if (typeof this.subjectSearchKey === 'object') {
-						console.error('搜索关键词是对象而非字符串:', this.subjectSearchKey);
+					// 确保搜索关键词一定是字符串
+					if (typeof this.subjectSearchKey !== 'string') {
+						console.error('搜索关键词不是字符串:', this.subjectSearchKey);
 						this.subjectSearchKey = '';
 					}
 					
@@ -1068,8 +1175,13 @@
 					this.loadAllSubjects(true);
 				} catch (err) {
 					console.error('搜索出错:', err);
+					// 确保在出错时也重置为空字符串并执行搜索
+					this.subjectSearchKey = '';
+					this.subjectPage = 1;
+					this.loadAllSubjects(true);
+					
 					uni.showToast({
-						title: '搜索功能出错，请联系管理员',
+						title: '搜索功能出错，已重置',
 						icon: 'none'
 					});
 				}
@@ -1085,16 +1197,27 @@
 				this.subjectSearchKey = ''; // 清空搜索关键词
 				// 重置考核对象分页数据
 				this.subjectPage = 1;
-				this.loadAllSubjects(true); // 重新加载考核对象
 				
+				// 先打开弹窗，再加载数据，避免加载延迟导致的UI问题
 				this.$refs.subjectSelectorPopup.open();
 				
-				// 使用setTimeout确保弹窗显示后再处理
+				// 确保弹窗显示后再加载数据
 				setTimeout(() => {
-					// 高亮显示已选项
-					this.scrollToSelected();
-					// 调整弹窗高度和布局
-					this.adjustSubjectPopup();
+					try {
+						this.loadAllSubjects(true); // 重新加载考核对象
+						
+						// 高亮显示已选项
+						this.scrollToSelected();
+						// 调整弹窗高度和布局
+						this.adjustSubjectPopup();
+					} catch (err) {
+						console.error('加载考核对象出错:', err);
+						uni.hideLoading(); // 确保出错时也能隐藏加载框
+						uni.showToast({
+							title: '加载数据出错，请重试',
+							icon: 'none'
+						});
+					}
 				}, 300);
 			},
 			
@@ -1108,15 +1231,27 @@
 				this.subjectSearchKey = ''; // 清空搜索关键词
 				// 重置考核对象分页数据
 				this.subjectPage = 1;
-				this.loadAllSubjects(true); // 重新加载考核对象
 				
+				// 先打开弹窗，再加载数据
 				this.$refs.subjectSelectorPopup.open();
 				
+				// 确保弹窗显示后再加载数据
 				setTimeout(() => {
-					// 高亮显示已选项
-					this.scrollToSelected();
-					// 调整弹窗高度和布局
-					this.adjustSubjectPopup();
+					try {
+						this.loadAllSubjects(true); // 重新加载考核对象
+						
+						// 高亮显示已选项
+						this.scrollToSelected();
+						// 调整弹窗高度和布局
+						this.adjustSubjectPopup();
+					} catch (err) {
+						console.error('加载考核对象出错:', err);
+						uni.hideLoading(); // 确保出错时也能隐藏加载框
+						uni.showToast({
+							title: '加载数据出错，请重试',
+							icon: 'none'
+						});
+					}
 				}, 300);
 			},
 			
@@ -1190,6 +1325,13 @@
 			hideSubjectSelector() {
 				this.$refs.subjectSelectorPopup.close();
 				this.subjectSearchKey = '';
+				
+				// 确保关闭选择器时，任何可能的loading都被关闭
+				if (this.isLoadingSubjects) {
+					console.log('关闭选择器时，检测到仍在加载数据，强制关闭加载框');
+					this.isLoadingSubjects = false;
+					uni.hideLoading();
+				}
 			},
 			
 			// 判断考核对象是否已选中
@@ -1432,6 +1574,52 @@
 				if (!username) return '未指定';
 				const rater = this.raters.find(r => r.username === username);
 				return rater ? rater.name || username : username;
+			},
+			
+			// 添加一个新方法用于初始化加载考核对象，不显示加载框
+			loadInitialSubjects() {
+				if (this.isLoadingSubjects) return;
+				
+				this.isLoadingSubjects = true;
+				
+				// 使用关键词搜索
+				const searchParams = {
+					page: 1,
+					pageSize: this.subjectPageSize
+				};
+				
+				console.log('初始化加载考核对象参数:', JSON.stringify(searchParams));
+				
+				uniCloud.callFunction({
+					name: 'subject',
+					data: {
+						action: 'getSubjects',
+						data: searchParams
+					}
+				}).then(res => {
+					this.isLoadingSubjects = false;
+					
+					if (res.result.code === 0) {
+						const data = res.result.data;
+						console.log(`初始化获取考核对象成功: 共${data.total}条, 当前第${data.page}页, 每页${data.pageSize}条`);
+						
+						this.allSubjects = data.list;
+						this.subjectTotal = data.total;
+						this.hasMoreSubjects = this.allSubjects.length < this.subjectTotal;
+					} else {
+						console.error('初始化获取考核对象失败:', res.result.msg);
+					}
+				}).catch(err => {
+					this.isLoadingSubjects = false;
+					console.error('初始化加载考核对象失败:', err);
+				});
+			},
+			
+			// 返回年份分类页面
+			goBackToYears() {
+				uni.navigateBack({
+					delta: 1  // 返回上一页
+				});
 			}
 		}
 	}
@@ -1669,7 +1857,14 @@ page {
 }
 
 .action-btn.edit {
-	color: var(--primary-color);
+	background-color: #e6f7ff;
+	color: #1890ff;
+	margin-right: 8rpx;
+}
+
+.action-btn.delete {
+	background-color: #fff1f0;
+	color: #ff4d4f;
 }
 
 .action-btn:active {
@@ -2239,5 +2434,19 @@ page {
 	content: "";
 	display: table;
 	clear: both;
+}
+
+/* 添加返回按钮样式 */
+.back-btn {
+	background-color: #FFFFFF;
+	color: #007AFF;
+	font-size: 28rpx;
+	padding: 10rpx 30rpx;
+	border-radius: 30rpx;
+	border: 1rpx solid #007AFF;
+	margin-right: 15rpx;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 </style> 

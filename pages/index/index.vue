@@ -15,7 +15,7 @@
 			</view>
 			
 			<view class="stat-cards">
-				<view class="stat-card" @click="navigateTo('/pages/admin/tables/tables')">
+				<view class="stat-card" @click="navigateTo('/pages/admin/tables/years')">
 					<text class="stat-num">{{stats.tableCount || 0}}</text>
 					<text class="stat-label">评分表数量</text>
 				</view>
@@ -39,7 +39,7 @@
 			<view class="quick-actions">
 				<view class="action-title">快捷操作</view>
 				<view class="action-grid">
-					<view class="action-item" @click="navigateTo('/pages/admin/tables/tables')">
+					<view class="action-item" @click="navigateTo('/pages/admin/tables/years')">
 						<view class="action-icon-box icon-table"></view>
 						<text class="action-text">评分表管理</text>
 					</view>
