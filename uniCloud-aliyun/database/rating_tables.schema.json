@@ -18,7 +18,7 @@
     },
     "type": {
       "bsonType": "int",
-      "description": "评分表类型：1-(办公室)一般干部评分, 2-(驻村)干部评分, 3-班子评分-中层干部考核评分表（分别评分), 4.班子评分-驻村干部考核, 5.班子评分-分管线上一般干部考核",
+      "description": "评分表类型：1-A类班子评分, 2-A类驻村工作评分, 3-B类分管班子评分, 4.B类驻村工作评分, 5.B类办主任评分",
       "minimum": 1,
       "maximum": 3,
       "title": "评分表类型"
@@ -32,6 +32,11 @@
       "bsonType": "string",
       "description": "评分人用户名",
       "title": "评分人"
+    },
+    "group_id": {
+      "bsonType": "string",
+      "description": "所属表格组ID",
+      "title": "表格组"
     },
     "items": {
       "bsonType": "array",

@@ -78,16 +78,34 @@
 				</view>
 				<view class="form-item">
 					<text class="form-label">表类型</text>
-					<picker @change="handleFormTypeChange" :value="formData.typeIndex" :range="typeOptions" range-key="name">
-						<view class="form-picker">
-							<text>{{typeOptions[formData.typeIndex].name}}</text>
-							<text class="picker-arrow">▼</text>
+					<view class="form-type-selection">
+						<view class="table-type-level">
+							<text class="level-label">分类:</text>
+							<picker @change="handleFormCategoryChange" :value="formData.categoryIndex" :range="categoryOptions" range-key="name">
+								<view class="form-picker">
+									<text>{{categoryOptions[formData.categoryIndex].name}}</text>
+									<text class="picker-arrow">▼</text>
+								</view>
+							</picker>
 						</view>
-					</picker>
+						<view class="table-type-level">
+							<text class="level-label">类型:</text>
+							<picker @change="handleFormTypeChange" :value="formData.typeIndex" :range="getTypeOptionsByCategory(formData.categoryIndex)" range-key="name">
+								<view class="form-picker">
+									<text>{{getTypeOptionsByCategory(formData.categoryIndex)[formData.typeIndex].name}}</text>
+									<text class="picker-arrow">▼</text>
+								</view>
+							</picker>
+						</view>
+					</view>
 				</view>
 				<view class="form-item">
 					<text class="form-label">分类</text>
 					<input v-model="formData.category" class="form-input" placeholder="请输入分类，如便民服务、党建办等" />
+				</view>
+				<view class="form-item">
+					<text class="form-label">时间分类</text>
+					<input v-model="formData.timeCategory" class="form-input" placeholder="年度时间分类" readonly />
 				</view>
 				<view class="form-item">
 					<text class="form-label">评分人</text>
@@ -134,19 +152,35 @@
 				</view>
 				<view class="form-item">
 					<text class="form-label">表类型</text>
-					<picker @change="handleEditTypeChange" :value="editData.typeIndex" :range="typeOptions" range-key="name">
-						<view class="form-picker">
-							<text>{{typeOptions[editData.typeIndex].name}}</text>
-							<text class="picker-arrow">▼</text>
+					<view class="form-type-selection">
+						<view class="table-type-level">
+							<text class="level-label">分类:</text>
+							<picker @change="handleEditCategoryChange" :value="editData.categoryIndex" :range="categoryOptions" range-key="name">
+								<view class="form-picker">
+									<text>{{categoryOptions[editData.categoryIndex].name}}</text>
+									<text class="picker-arrow">▼</text>
+								</view>
+							</picker>
 						</view>
-					</picker>
+						<view class="table-type-level">
+							<text class="level-label">类型:</text>
+							<picker @change="handleEditTypeChange" :value="editData.typeIndex" :range="getTypeOptionsByCategory(editData.categoryIndex)" range-key="name">
+								<view class="form-picker">
+									<text>{{getTypeOptionsByCategory(editData.categoryIndex)[editData.typeIndex].name}}</text>
+									<text class="picker-arrow">▼</text>
+								</view>
+							</picker>
+						</view>
+					</view>
+				</view>
+				<view class="form-item">
+					<text class="form-label">时间分类</text>
+					<input v-model="editData.timeCategory" class="form-input" placeholder="年度时间分类" readonly />
 				</view>
 				<view class="form-item">
 					<text class="form-label">分类</text>
 					<input v-model="editData.category" class="form-input" placeholder="请输入分类，如便民服务、党建办等" />
 				</view>
-				
-				<!-- 更新评分人选择部分 -->
 				<view class="form-item">
 					<text class="form-label">评分人</text>
 					<view class="picker-box" @click="showEditRaterSelector">
@@ -341,11 +375,27 @@
 				currentTypeIndex: 0,
 				typeOptions: [
 					{ id: 0, name: '全部类型' },
-					{ id: 1, name: '(办公室)一般干部评分' },
-					{ id: 2, name: '(驻村)干部评分' },
-					{ id: 3, name: '班子评分-中层干部考核评分表（分别评分)' },
-					{ id: 4, name: '班子评分-驻村干部考核' },
-					{ id: 5, name: '班子评分-分管线上一般干部考核' }
+					{ id: 1, name: 'A类班子评分' },
+					{ id: 2, name: 'A类驻村工作评分' },
+					{ id: 3, name: 'B类分管班子评分' },
+					{ id: 4, name: 'B类驻村工作评分' },
+					{ id: 5, name: 'B类办主任评分' }
+				],
+				// 添加分类选项
+				categoryOptions: [
+					{ id: 'A', name: 'A类' },
+					{ id: 'B', name: 'B类' }
+				],
+				// 添加A类选项
+				typeOptionsA: [
+					{ id: 1, name: '班子评分' },
+					{ id: 2, name: '驻村工作评分' },
+				],
+				// 添加B类选项
+				typeOptionsB: [
+					{ id: 3, name: '分管班子评分' },
+					{ id: 4, name: '驻村工作评分' },
+					{ id: 5, name: '办主任评分' },
 				],
 				tables: [],
 				page: 1,
@@ -357,8 +407,10 @@
 				// 表单数据
 				formData: {
 					name: '',
-					typeIndex: 1,
+					categoryIndex: 0, // A/B类索引
+					typeIndex: 0, // 类型索引
 					category: '',
+					timeCategory: '', // 时间分类
 					rater: '',
 					selectedSubjects: []
 				},
@@ -372,8 +424,10 @@
 				editData: {
 					id: '',
 					name: '',
-					typeIndex: 1,
+					categoryIndex: 0, // A/B类索引
+					typeIndex: 0, // 类型索引
 					category: '',
+					timeCategory: '', // 时间分类
 					selectedSubjects: [],
 					rater: ''
 				},
@@ -400,57 +454,36 @@
 				editingTableId: '', // 正在编辑的表ID
 				selectingMode: '', // 评分人选择器的模式: 'add'新增表单, 'edit'编辑表单
 				currentSubjectTab: 0, // 当前选中的选项卡索引
-				yearFilter: '' // 添加年份筛选参数
+				yearFilter: '', // 添加年份筛选参数
+				groupId: '' // 添加表格组ID
 			}
 		},
 		onLoad(options) {
-			// 检查是否有年份参数
+			// 确保搜索关键词是字符串
+			if (typeof this.subjectSearchKey !== 'string') {
+				console.log('重置非字符串搜索关键词:', this.subjectSearchKey);
+				this.subjectSearchKey = '';
+			}
+			
+			// 检查是否有年份和表格组参数
 			if (options.year) {
 				this.yearFilter = options.year;
 				uni.setNavigationBarTitle({
 					title: `${options.year}年评分表`
 				});
-			}
-		},
-		onShow() {
-			// 初始加载数据
-			this.tables = [];
-			this.currentPage = 1;
-			this.hasMoreData = true;
-			this.loadData();
-			this.loadRaters();
-			this.loadSubjects();
-		},
-		computed: {
-			// 过滤后的考核对象列表
-			filteredSubjects() {
-				// 直接返回通过云函数筛选后的考核对象列表
-				// 不再在前端进行过滤，而是依赖云函数的搜索功能
-				return this.allSubjects;
-			},
-			
-			// 过滤后的评分人列表
-			filteredRaters() {
-				if (!this.raterSearchKey) {
-					// 跳过第一个"请选择评分人"的选项
-					return this.raters.slice(1);
+				
+				// 检查是否有表格组ID
+				if (options.group_id) {
+					this.groupId = options.group_id;
 				}
 				
-				const key = this.raterSearchKey.toLowerCase();
-				return this.raters.filter(rater => {
-					// 排除第一个空选项，并进行关键词过滤
-					return rater.username && (
-						rater.name.toLowerCase().includes(key) || 
-						rater.username.toLowerCase().includes(key)
-					);
-				});
-			}
-		},
-		onLoad() {
-			// 确保搜索关键词是字符串
-			if (typeof this.subjectSearchKey !== 'string') {
-				console.log('重置非字符串搜索关键词:', this.subjectSearchKey);
-				this.subjectSearchKey = '';
+				// 如果带有createNew参数，自动打开新建表格弹窗
+				if (options.createNew === 'true') {
+					// 延迟打开，确保页面已加载完成
+					setTimeout(() => {
+						this.showAddTableModal();
+					}, 500);
+				}
 			}
 			
 			// 设置全局的加载保护
@@ -481,6 +514,40 @@
 			// 调试方法检查
 			this.debugMethods();
 		},
+		onShow() {
+			// 初始加载数据
+			this.tables = [];
+			this.currentPage = 1;
+			this.hasMoreData = true;
+			this.loadData();
+			this.loadRaters();
+			// this.loadSubjects(); // 删除这一行调用，因为它在onLoad中已经被调用，或者没有实现
+		},
+		computed: {
+			// 过滤后的考核对象列表
+			filteredSubjects() {
+				// 直接返回通过云函数筛选后的考核对象列表
+				// 不再在前端进行过滤，而是依赖云函数的搜索功能
+				return this.allSubjects;
+			},
+			
+			// 过滤后的评分人列表
+			filteredRaters() {
+				if (!this.raterSearchKey) {
+					// 跳过第一个"请选择评分人"的选项
+					return this.raters.slice(1);
+				}
+				
+				const key = this.raterSearchKey.toLowerCase();
+				return this.raters.filter(rater => {
+					// 排除第一个空选项，并进行关键词过滤
+					return rater.username && (
+						rater.name.toLowerCase().includes(key) || 
+						rater.username.toLowerCase().includes(key)
+					);
+				});
+			}
+		},
 		onReachBottom() {
 			if (this.hasMoreData && !this.isLoading) {
 				this.loadMore();
@@ -490,13 +557,40 @@
 			// 获取评分表类型名称
 			getTableTypeName(type) {
 				const typeMap = {
-					1: '(办公室)一般干部评分',
-					2: '(驻村)干部评分',
-					3: '班子评分-中层干部考核评分表（分别评分)',
-					4: '班子评分-驻村干部考核',
-					5: '班子评分-分管线上一般干部考核'
+					1: '班子评分',
+					2: '驻村工作评分',
+					3: '分管班子评分',
+					4: '驻村工作评分',
+					5: '办主任评分'
 				};
 				return typeMap[type] || '未知类型';
+			},
+			
+			// 根据分类索引获取对应的类型选项
+			getTypeOptionsByCategory(categoryIndex) {
+				return categoryIndex === 0 ? this.typeOptionsA : this.typeOptionsB;
+			},
+			
+			// 处理表单分类变化
+			handleFormCategoryChange(e) {
+				this.formData.categoryIndex = e.detail.value;
+				this.formData.typeIndex = 0; // 重置类型索引
+			},
+			
+			// 处理表单类型变化
+			handleFormTypeChange(e) {
+				this.formData.typeIndex = e.detail.value;
+			},
+			
+			// 处理编辑分类变化
+			handleEditCategoryChange(e) {
+				this.editData.categoryIndex = e.detail.value;
+				this.editData.typeIndex = 0; // 重置类型索引
+			},
+			
+			// 处理编辑类型变化
+			handleEditTypeChange(e) {
+				this.editData.typeIndex = e.detail.value;
 			},
 			
 			// 处理类型筛选变化
@@ -505,6 +599,71 @@
 				this.page = 1;
 				this.tables = [];
 				this.loadTables();
+			},
+			
+			// 加载评分表
+			loadTables() {
+				this.isLoading = true;
+				console.log('开始加载评分表，当前评分人列表数量:', this.raters.length);
+				
+				const type = this.typeOptions[this.currentTypeIndex].id;
+				
+				uniCloud.callFunction({
+					name: 'ratingTable',
+					data: {
+						action: 'getTables',
+						data: {
+							type: type > 0 ? type : undefined,
+							page: this.page,
+							pageSize: this.pageSize,
+							year: this.yearFilter || '', // 添加年份筛选参数
+							group_id: this.groupId || '' // 添加表格组ID
+						}
+					}
+				}).then(res => {
+					this.isLoading = false;
+					
+					if (res.result.code === 0) {
+						const data = res.result.data;
+						
+						if (this.page === 1) {
+							this.tables = data.list;
+						} else {
+							this.tables = this.tables.concat(data.list);
+						}
+						
+						this.total = data.total;
+						this.hasMoreData = this.tables.length < this.total;
+						
+						// 打印第一个表格的评分人信息
+						if (this.tables.length > 0) {
+							const firstTable = this.tables[0];
+							console.log('第一个表格评分人:', {
+								rater: firstTable.rater,
+								displayName: this.getRaterName(firstTable.rater)
+							});
+						}
+						
+						// 如果使用年份筛选，更新标题
+						if (this.yearFilter) {
+							uni.setNavigationBarTitle({
+								title: `${this.yearFilter}年评分表`
+							});
+						}
+					} else {
+						uni.showToast({
+							title: res.result.msg || '加载失败',
+							icon: 'none'
+						});
+					}
+				}).catch(err => {
+					this.isLoading = false;
+					console.error(err);
+					uni.showToast({
+						title: '加载失败，请检查网络',
+						icon: 'none'
+					});
+				});
 			},
 			
 			// 修改loadData方法，增加对年份的筛选
@@ -528,10 +687,19 @@
 					}
 				}).then(res => {
 					if (res.result.code === 0) {
-						let tables = res.result.data;
+						let tables;
+						// 确保数据是对象格式，并获取正确的list数组
+						if (res.result.data && res.result.data.list) {
+							tables = res.result.data.list;
+						} else if (Array.isArray(res.result.data)) {
+							tables = res.result.data;
+						} else {
+							tables = [];
+							console.error('意外的数据格式:', res.result.data);
+						}
 						
 						// 如果有年份筛选，则过滤表格
-						if (this.yearFilter) {
+						if (this.yearFilter && Array.isArray(tables)) {
 							tables = tables.filter(table => {
 								// 从表名中提取年份
 								const yearRegex = new RegExp(this.yearFilter);
@@ -551,10 +719,10 @@
 						if (this.currentPage === 1) {
 							this.tables = tables;
 						} else {
-							this.tables = [...this.tables, ...tables];
+							this.tables = [...this.tables, ...(Array.isArray(tables) ? tables : [])];
 						}
 						
-						this.hasMoreData = tables.length === 10;
+						this.hasMoreData = Array.isArray(tables) && tables.length === 10;
 					} else {
 						uni.showToast({
 							title: '获取数据失败',
@@ -627,12 +795,22 @@
 				// 重置表单
 				this.formData = {
 					name: '',
+					categoryIndex: 0,
 					typeIndex: 0,
-					type: 'all',
 					category: '',
+					timeCategory: '',
 					rater: '',
-					selectedSubjects: []
+					selectedSubjects: [],
+					group_id: this.groupId || '' // 添加表格组ID
 				};
+				
+				// 如果有年份筛选，自动添加到表名和时间分类
+				if (this.yearFilter) {
+					this.formData.name = `${this.yearFilter}年`;
+					this.formData.timeCategory = `${this.yearFilter}年度`;
+					this.formData.category = ''; // 重置分类，与时间区分
+				}
+				
 				this.currentRaterIndex = 0;
 				
 				this.$refs.addTablePopup.open();
@@ -641,11 +819,6 @@
 			// 隐藏新增评分表弹窗
 			hideAddTablePopup() {
 				this.$refs.addTablePopup.close();
-			},
-			
-			// 处理表单类型变化
-			handleFormTypeChange(e) {
-				this.formData.typeIndex = e.detail.value;
 			},
 			
 			// 处理评分人选择变化
@@ -684,7 +857,9 @@
 					title: '提交中...'
 				});
 				
-				const type = this.typeOptions[this.formData.typeIndex].id;
+				// 获取正确的类型ID
+				const typeOptions = this.getTypeOptionsByCategory(this.formData.categoryIndex);
+				const type = typeOptions[this.formData.typeIndex].id;
 				
 				uniCloud.callFunction({
 					name: 'ratingTable',
@@ -694,7 +869,9 @@
 							name: this.formData.name,
 							type: type,
 							category: this.formData.category,
+							timeCategory: this.formData.timeCategory, // 添加时间分类
 							rater: this.formData.rater,
+							group_id: this.formData.group_id, // 添加表格组ID
 							selectedSubjects: this.formData.selectedSubjects
 						}
 					}
@@ -729,12 +906,27 @@
 			// 编辑评分表
 			editTable(table) {
 				this.editingTableId = table._id;
+				
+				// 确定表格的分类索引和类型索引
+				let categoryIndex = 0;
+				let typeIndex = 0;
+				
+				// 判断类型ID属于哪个分类
+				if (table.type >= 1 && table.type <= 2) {
+					categoryIndex = 0; // A类
+					typeIndex = table.type - 1; // 减1因为索引从0开始
+				} else if (table.type >= 3 && table.type <= 5) {
+					categoryIndex = 1; // B类
+					typeIndex = table.type - 3; // 减3因为B类第一个ID是3
+				}
+				
 				this.editData = {
 					_id: table._id,
 					name: table.name,
-					typeIndex: table.type,
-					type: table.type,
+					categoryIndex: categoryIndex,
+					typeIndex: typeIndex,
 					category: table.category || '',
+					timeCategory: this.yearFilter ? `${this.yearFilter}年度` : '', // 设置时间分类
 					selectedSubjects: [],
 					rater: table.rater
 				};
@@ -773,11 +965,6 @@
 				this.$refs.editTablePopup.close();
 			},
 			
-			// 处理编辑类型变化
-			handleEditTypeChange(e) {
-				this.editData.typeIndex = e.detail.value;
-			},
-			
 			// 提交编辑评分表
 			submitEditTable() {
 				if (!this.editData.name) {
@@ -801,7 +988,9 @@
 					title: '提交中...'
 				});
 				
-				const type = this.typeOptions[this.editData.typeIndex].id;
+				// 获取正确的类型ID
+				const typeOptions = this.getTypeOptionsByCategory(this.editData.categoryIndex);
+				const type = typeOptions[this.editData.typeIndex].id;
 				
 				uniCloud.callFunction({
 					name: 'ratingTable',
@@ -813,6 +1002,7 @@
 								name: this.editData.name,
 								type: type,
 								category: this.editData.category,
+								timeCategory: this.editData.timeCategory, // 添加时间分类
 								selectedSubjects: this.editData.selectedSubjects,
 								rater: this.editData.rater
 							}
@@ -1617,10 +1807,10 @@
 			
 			// 返回年份分类页面
 			goBackToYears() {
-				uni.navigateBack({
-					delta: 1  // 返回上一页
+				uni.navigateTo({
+					url: '/pages/admin/tables/years'
 				});
-			}
+			},
 		}
 	}
 </script>
@@ -2448,5 +2638,48 @@ page {
 	display: flex;
 	align-items: center;
 	justify-content: center;
+}
+
+.form-type-selection {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12rpx;
+	margin-bottom: 16rpx;
+	width: 100%; /* 确保容器占满宽度 */
+}
+
+.table-type-level {
+	display: flex;
+	align-items: center;
+	margin-right: 20rpx;
+	margin-bottom: 10rpx;
+	flex: 1;
+	min-width: 45%;
+}
+
+.level-label {
+	font-size: 26rpx;
+	color: var(--text-secondary);
+	margin-right: 10rpx;
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+.form-picker {
+	flex: 1;
+	background-color: #FAFAFA;
+	border: 1px solid var(--border-color);
+	border-radius: 8rpx;
+	padding: 12rpx 24rpx;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	min-width: 120rpx;
+}
+
+/* 只读输入框样式 */
+.form-input[readonly] {
+	background-color: #F5F7FA;
+	color: var(--text-regular);
 }
 </style> 

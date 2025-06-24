@@ -3,6 +3,7 @@ const db = uniCloud.database();
 const ratingTableCollection = db.collection('rating_tables');
 const userCollection = db.collection('users');
 const subjectCollection = db.collection('subjects');
+const groupCollection = db.collection('rating_groups');
 
 exports.main = async (event, context) => {
   const { action, data } = event;
@@ -29,6 +30,14 @@ exports.main = async (event, context) => {
       return await changeRater(data);
     case 'getRaterTables':
       return await getRaterTables(data, context);
+    case 'createGroup':
+      return await createGroup(data);
+    case 'updateGroup':
+      return await updateGroup(data);
+    case 'deleteGroup':
+      return await deleteGroup(data);
+    case 'getGroups':
+      return await getGroups(data);
     default:
       return {
         code: -1,
@@ -39,7 +48,7 @@ exports.main = async (event, context) => {
 
 // 创建评分表
 async function createTable(data) {
-  const { name, type, category, rater, items = [], selectedSubjects = [] } = data;
+  const { name, type, category, rater, group_id, items = [], selectedSubjects = [] } = data;
   
   // 参数校验
   if (!name || !type || !rater) {
@@ -62,17 +71,29 @@ async function createTable(data) {
       };
     }
     
+    // 如果提供了表格组ID，验证表格组是否存在
+    if (group_id) {
+      const groupInfo = await groupCollection.doc(group_id).get();
+      if (groupInfo.data.length === 0) {
+        return {
+          code: -1,
+          msg: '表格组不存在'
+        };
+      }
+    }
+    
     // 创建评分表
     const defaultItems = [];
     if (items.length === 0) {
       // 默认评分项
-      if (type === 3 && category && category.includes('中层干部考核评分表')) {
+      if (type === 1 && category && category.includes('中层干部考核评分表')) {
         // 班子评分表默认项
         defaultItems.push({
           name: '重点工作完成情况+办公室管理情况',
           maxScore: 100
         });
-      } else {
+      } 
+      else {
         // 其他评分表默认项
         defaultItems.push({
           name: '工作完成质量',
@@ -94,6 +115,7 @@ async function createTable(data) {
       type,
       category: category || '',
       rater,
+      group_id: group_id || '',
       items: items.length > 0 ? items : defaultItems
     });
     
@@ -175,6 +197,17 @@ async function updateTable(data) {
   try {
     // 从updateData中提取selectedSubjects，避免将其直接保存到评分表中
     const { selectedSubjects, ...tableUpdateData } = updateData;
+    
+    // 如果更新了表格组ID，验证表格组是否存在
+    if (tableUpdateData.group_id) {
+      const groupInfo = await groupCollection.doc(tableUpdateData.group_id).get();
+      if (groupInfo.data.length === 0) {
+        return {
+          code: -1,
+          msg: '表格组不存在'
+        };
+      }
+    }
     
     // 更新评分表基本信息
     await ratingTableCollection.doc(tableId).update(tableUpdateData);
@@ -339,18 +372,28 @@ async function deleteTable(data) {
 
 // 获取评分表列表
 async function getTables(data) {
-  const { type, rater, page = 1, pageSize = 10 } = data;
+  const { type, rater, page = 1, pageSize = 10, year, group_id } = data;
   
   try {
     let query = ratingTableCollection;
     
     // 筛选条件
     const whereConditions = {};
-    if (type) {
+    if (type && type !== 'all') {
       whereConditions.type = type;
     }
     if (rater) {
       whereConditions.rater = rater;
+    }
+    if (group_id) {
+      whereConditions.group_id = group_id;
+    }
+    
+    // 年份筛选逻辑
+    if (year) {
+      console.log('按年份筛选评分表:', year);
+      // 注意：这里不在数据库层面过滤，而是在后面获取数据后过滤
+      // 因为年份可能来自表名或创建时间，需要在应用层处理
     }
     
     if (Object.keys(whereConditions).length > 0) {
@@ -358,22 +401,45 @@ async function getTables(data) {
     }
     
     // 分页查询
-    const tableList = await query.skip((page - 1) * pageSize).limit(pageSize).get();
+    let tableList = await query.orderBy('create_time', 'desc').get();
+    let allData = tableList.data;
     
-    // 获取总数
-    const countResult = await query.count();
+    // 如果指定了年份，在应用层过滤数据
+    if (year) {
+      allData = allData.filter(table => {
+        // 从表名中提取年份
+        const yearRegex = new RegExp(year);
+        const nameMatch = table.name.match(yearRegex);
+        
+        // 从创建时间中提取年份
+        let createTimeMatch = false;
+        if (table.create_time) {
+          const createYear = new Date(table.create_time).getFullYear().toString();
+          createTimeMatch = createYear === year;
+        }
+        
+        return nameMatch || createTimeMatch;
+      });
+    }
+    
+    // 手动分页
+    const total = allData.length;
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, total);
+    const pageData = allData.slice(startIndex, endIndex);
     
     return {
       code: 0,
       msg: '获取评分表列表成功',
       data: {
-        list: tableList.data,
-        total: countResult.total,
+        list: pageData,
+        total: total,
         page,
         pageSize
       }
     };
   } catch (e) {
+    console.error('获取评分表列表失败:', e);
     return {
       code: -1,
       msg: '获取评分表列表失败',
@@ -802,4 +868,160 @@ async function getUserByToken(token) {
 function getUniIdToken() {
   // 在云函数中无法使用此方法，需要通过context获取
   return null;
+}
+
+// 创建表格组
+async function createGroup(data) {
+  const { year, description = '' } = data;
+  
+  // 参数校验
+  if (!year) {
+    return {
+      code: -1,
+      msg: '年份不能为空'
+    };
+  }
+  
+  try {
+    // 检查是否已存在同年份的分组
+    const existingGroups = await groupCollection.where({
+      year: year
+    }).get();
+    
+    if (existingGroups.data.length > 0) {
+      return {
+        code: -1,
+        msg: `${year}年度表格组已存在`
+      };
+    }
+    
+    // 创建新表格组
+    const result = await groupCollection.add({
+      year,
+      description,
+      create_time: new Date()
+    });
+    
+    return {
+      code: 0,
+      msg: '创建表格组成功',
+      data: {
+        id: result.id,
+        year: year
+      }
+    };
+  } catch (e) {
+    console.error('创建表格组出错:', e);
+    return {
+      code: -1,
+      msg: '创建表格组失败',
+      error: e.message
+    };
+  }
+}
+
+// 更新表格组
+async function updateGroup(data) {
+  const { id, year, description } = data;
+  
+  // 参数校验
+  if (!id) {
+    return {
+      code: -1,
+      msg: '表格组ID不能为空'
+    };
+  }
+  
+  try {
+    const updateData = {};
+    if (year) updateData.year = year;
+    if (description !== undefined) updateData.description = description;
+    
+    await groupCollection.doc(id).update(updateData);
+    
+    return {
+      code: 0,
+      msg: '更新表格组成功'
+    };
+  } catch (e) {
+    console.error('更新表格组出错:', e);
+    return {
+      code: -1,
+      msg: '更新表格组失败',
+      error: e.message
+    };
+  }
+}
+
+// 删除表格组
+async function deleteGroup(data) {
+  const { id } = data;
+  
+  // 参数校验
+  if (!id) {
+    return {
+      code: -1,
+      msg: '表格组ID不能为空'
+    };
+  }
+  
+  try {
+    // 检查该组是否有关联的评分表
+    const tables = await ratingTableCollection.where({
+      group_id: id
+    }).get();
+    
+    if (tables.data.length > 0) {
+      return {
+        code: -1,
+        msg: `该表格组下有${tables.data.length}个评分表，请先删除或转移相关评分表`
+      };
+    }
+    
+    await groupCollection.doc(id).remove();
+    
+    return {
+      code: 0,
+      msg: '删除表格组成功'
+    };
+  } catch (e) {
+    console.error('删除表格组出错:', e);
+    return {
+      code: -1,
+      msg: '删除表格组失败',
+      error: e.message
+    };
+  }
+}
+
+// 获取表格组列表
+async function getGroups(data) {
+  try {
+    const groups = await groupCollection.orderBy('year', 'desc').get();
+    
+    // 获取每个组中的评分表数量
+    const result = await Promise.all(groups.data.map(async (group) => {
+      const tables = await ratingTableCollection.where({
+        group_id: group._id
+      }).count();
+      
+      return {
+        ...group,
+        tableCount: tables.total
+      };
+    }));
+    
+    return {
+      code: 0,
+      msg: '获取表格组列表成功',
+      data: result
+    };
+  } catch (e) {
+    console.error('获取表格组列表失败:', e);
+    return {
+      code: -1,
+      msg: '获取表格组列表失败',
+      error: e.message
+    };
+  }
 } 

@@ -1,0 +1,27 @@
+{
+	"bsonType": "object",
+	"required": ["year", "create_time"],
+	"permission": {
+		"read": true,
+		"create": "auth.role == 'admin'",
+		"update": "auth.role == 'admin'",
+		"delete": "auth.role == 'admin'"
+	},
+	"properties": {
+		"_id": {
+			"description": "ID，系统自动生成"
+		},
+		"year": {
+			"bsonType": "string",
+			"description": "年份，例如：2023"
+		},
+		"description": {
+			"bsonType": "string",
+			"description": "分组说明，可选"
+		},
+		"create_time": {
+			"bsonType": "timestamp",
+			"description": "创建时间"
+		}
+	}
+} 
