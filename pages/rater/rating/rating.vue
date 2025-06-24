@@ -61,13 +61,17 @@
 				</view>
 				<view class="total-input-hint emphasis">
 					<text>请根据以上评分标准，直接输入总分</text>
-			</view>
+				</view>
 				<view class="total-input">
-					<slider :min="0" :max="100" :value="getTotalScoreValue()" :step="1" show-value
-						@change="handleTotalScoreChange" block-color="#07c160" activeColor="#07c160" block-size="28" />
+					<slider :min="0" :max="100" :value="getTotalScoreValue()" :step="1" :show-value="false"
+						@change="handleTotalScoreChange" block-color="#07c160" activeColor="#07c160" block-size="40" style="width: 85%;" />
+					<view class="score-input-box" @click="showScoreInput">
+						<text class="score-value">{{calculateTotalScore()}}</text>
+					</view>
 				</view>
 				<view class="total-input-hint">
 					<text class="total-display">当前总分：<text class="total-current">{{calculateTotalScore()}}</text>分</text>
+					<text class="score-input-tip">(点击数字可直接输入)</text>
 				</view>
 			</view>
 			
@@ -81,6 +85,17 @@
 		<view class="no-subjects" v-if="!subjects || subjects.length === 0">
 			<text>暂无考核对象</text>
 		</view>
+		
+		<!-- 分数输入弹窗 -->
+		<uni-popup ref="scorePopup" type="dialog">
+			<uni-popup-dialog
+				title="输入分数"
+				:before-close="false"
+				@confirm="confirmScoreInput"
+				@close="closeScoreInput">
+				<input type="number" v-model="inputScore" class="score-popup-input" placeholder="请输入分数(0-100)" />
+			</uni-popup-dialog>
+		</uni-popup>
 	</view>
 </template>
 
@@ -98,6 +113,7 @@
 				allScores: {},
 				subjectRatingStatus: [],
 				pendingSubmissions: [],
+				inputScore: '',
 				tableTypes: {
 					1: '(办公室)一般干部评分',
 					2: '(驻村)干部评分',
@@ -902,6 +918,38 @@
 					
 					console.log('根据总分自动分配后的评分:', this.scores, '总分:', this.calculateTotalScore());
 				}
+			},
+			// 显示分数输入弹窗
+			showScoreInput() {
+				this.inputScore = this.calculateTotalScore().toString();
+				this.$refs.scorePopup.open();
+			},
+			
+			// 确认分数输入
+			confirmScoreInput() {
+				const score = parseInt(this.inputScore);
+				if (isNaN(score) || score < 0 || score > 100) {
+					uni.showToast({
+						title: '请输入0-100之间的数字',
+						icon: 'none'
+					});
+					return;
+				}
+				
+				// 模拟slider的change事件
+				this.handleTotalScoreChange({
+					detail: {
+						value: score
+					}
+				});
+				
+				this.$refs.scorePopup.close();
+			},
+			
+			// 关闭分数输入弹窗
+			closeScoreInput() {
+				// 主动关闭弹窗
+				this.$refs.scorePopup.close();
 			}
 		}
 	}
@@ -1142,7 +1190,7 @@
 	}
 	
 	.total-input {
-		height: 100rpx;
+		height: 140rpx;
 		border: 1rpx solid #e0f2e9;
 		border-radius: 12rpx;
 		display: flex;
@@ -1154,6 +1202,62 @@
 		margin: 15rpx 0;
 	}
 	
+	.total-input slider {
+		margin: 0 auto;
+	}
+	
+	/* 修改滑块样式，增强触摸区域 */
+	.total-input /deep/ .uni-slider-handle {
+		width: 50rpx !important;
+		height: 50rpx !important;
+		border-radius: 50% !important;
+		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.2) !important;
+	}
+	
+	/* 调整滑块轨道的高度 */
+	.total-input /deep/ .uni-slider-track {
+		height: 12rpx !important;
+		border-radius: 6rpx !important;
+	}
+	
+	.score-input-box {
+		min-width: 80rpx;
+		height: 80rpx;
+		background-color: #07c160;
+		border-radius: 40rpx;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		padding: 0 20rpx;
+		box-shadow: 0 2rpx 8rpx rgba(7, 193, 96, 0.2);
+		margin-left: 10rpx;
+	}
+	
+	.score-value {
+		font-size: 32rpx;
+		color: #ffffff;
+		font-weight: bold;
+		text-align: center;
+	}
+	
+	.score-input-tip {
+		font-size: 24rpx;
+		color: #999;
+		margin-left: 10rpx;
+	}
+	
+	.score-popup-input {
+		width: 100%;
+		height: 80rpx;
+		border: 1rpx solid #e0e0e0;
+		border-radius: 8rpx;
+		padding: 0 20rpx;
+		font-size: 32rpx;
+		text-align: center;
+		margin-top: 20rpx;
+	}
+	
+	/* 调整滑块与输入框的布局 */
 	.total-input-hint {
 		font-size: 26rpx;
 		color: #666;
