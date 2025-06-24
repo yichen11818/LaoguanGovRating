@@ -1,9 +1,6 @@
 <template>
 	<view class="profile-container">
 		<view class="profile-header">
-			<view class="avatar-box">
-				<image class="avatar" :src="userInfo.avatar || '../../../static/images/default-avatar.png'" mode="aspectFill"></image>
-			</view>
 			<view class="user-info">
 				<text class="user-name">{{userInfo.name || '游客'}}</text>
 				<view class="user-role" :class="'role-' + userInfo.role">
@@ -129,8 +126,7 @@
 					_id: '',
 					username: '',
 					name: '游客',
-					role: 1,
-					avatar: ''
+					role: 1
 				},
 				passwordForm: {
 					oldPassword: '',
@@ -536,22 +532,6 @@
 		width: 100%;
 	}
 	
-	.avatar-box {
-		width: 150rpx;
-		height: 150rpx;
-		border-radius: 50%;
-		overflow: hidden;
-		background-color: #f5f5f5;
-		margin-right: 30rpx;
-		box-shadow: 0 4rpx 8rpx rgba(0, 0, 0, 0.1);
-		flex-shrink: 0;
-	}
-	
-	.avatar {
-		width: 100%;
-		height: 100%;
-	}
-	
 	.user-info {
 		flex: 1;
 	}
@@ -782,11 +762,6 @@
 	
 	/* 响应式布局 */
 	@media screen and (max-width: 375px) {
-		.avatar-box {
-			width: 120rpx;
-			height: 120rpx;
-		}
-		
 		.user-name {
 			font-size: 32rpx;
 		}
