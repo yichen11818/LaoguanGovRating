@@ -30,6 +30,10 @@ exports.main = async (event, context) => {
       return await getTableRatings(data);
     case 'getRatingsByTable':
       return await getRatingsByTable(data);
+    case 'getTableStats':
+      return await getTableStats(data);
+    case 'getSubjectStats':
+      return await getSubjectStats(data);
     default:
       return {
         code: -1,
@@ -317,20 +321,25 @@ async function getRatingBySubject(data) {
   }
   
   try {
-    // 获取评分记录
-    let query = ratingCollection.where({
-      table_id: tableId,
-      subject: subject
-    });
+    console.log(`开始查询评分记录: 表ID=${tableId}, 考核对象=${subject}, 评分人=${rater || '未指定'}`);
     
-    // 如果提供了rater参数，则加入过滤条件
+    // 构建查询条件，确保严格匹配表ID
+    const whereCondition = {
+      table_id: tableId,  // 严格匹配表ID
+      subject: subject
+    };
+    
+    // 如果提供了rater参数，则添加评分人筛选条件
     if (rater) {
-      query = query.where({
-        rater: rater
-      });
+      whereCondition.rater = rater;
     }
     
-    const ratingInfo = await query.get();
+    console.log('查询条件:', JSON.stringify(whereCondition));
+    
+    // 获取评分记录
+    const ratingInfo = await ratingCollection.where(whereCondition).get();
+    
+    console.log(`找到${ratingInfo.data.length}条评分记录`);
     
     if (ratingInfo.data.length === 0) {
       return {
@@ -342,6 +351,17 @@ async function getRatingBySubject(data) {
     
     // 获取关联的评分表信息
     const rating = ratingInfo.data[0];
+    
+    // 再次验证表ID匹配
+    if (rating.table_id !== tableId) {
+      console.error('表ID不匹配: 期望的表ID =', tableId, '实际表ID =', rating.table_id);
+      return {
+        code: 0,
+        msg: '评分记录不匹配当前评分表',
+        data: null
+      };
+    }
+    
     const tableInfo = await ratingTableCollection.doc(rating.table_id).get();
     
     return {
@@ -367,14 +387,55 @@ async function getRatingStats(data) {
   const { type } = data;
   
   try {
+    // 获取所有评分表
     let query = ratingTableCollection;
-    
     if (type) {
       query = query.where({ type });
     }
-    
-    // 获取所有评分表
     const tables = await query.get();
+    
+    // 获取所有有效的评分表ID列表
+    const validTableIds = tables.data.map(table => table._id);
+    
+    // 如果没有评分表，直接返回空统计
+    if (validTableIds.length === 0) {
+      return {
+        code: 0,
+        msg: '获取评分统计成功',
+        data: {
+          tableCount: 0,
+          subjectCount: 0,
+          ratingCount: 0,
+          completionRate: '0%'
+        }
+      };
+    }
+    
+    // 获取所有评分表数量
+    const tableCount = tables.data.length;
+    
+    // 获取所有有效评分表的考核对象数量
+    const subjectResult = await subjectCollection.where({
+      table_id: db.command.in(validTableIds)
+    }).count();
+    const subjectCount = subjectResult.total || 0;
+    
+    // 获取所有有效评分表的评分记录数量
+    const ratingResult = await ratingCollection.where({
+      table_id: db.command.in(validTableIds)
+    }).count();
+    const ratingCount = ratingResult.total || 0;
+    
+    // 计算完成率 (只考虑有效的评分表的记录)
+    const completionRate = subjectCount > 0 ? Math.min(100, Math.round((ratingCount / subjectCount) * 100)) : 0;
+    
+    // 构建总概览数据
+    const overview = {
+      tableCount: tableCount,
+      subjectCount: subjectCount,
+      ratingCount: ratingCount,
+      completionRate: completionRate + '%'
+    };
     
     // 统计结果
     const statsResult = [];
@@ -396,7 +457,7 @@ async function getRatingStats(data) {
       let ratedCount = 0;
       
       for (const rating of ratings.data) {
-        totalScore += rating.total_score;
+        totalScore += rating.total_score || 0;
         ratedCount++;
       }
       
@@ -413,12 +474,13 @@ async function getRatingStats(data) {
     return {
       code: 0,
       msg: '获取评分统计成功',
-      data: statsResult
+      data: overview
     };
   } catch (e) {
+    console.error('获取评分统计失败:', e);
     return {
       code: -1,
-      msg: '获取评分统计失败',
+      msg: '获取评分统计失败: ' + e.message,
       error: e.message
     };
   }
@@ -623,19 +685,19 @@ async function getRatingsByTable(data) {
     }
     
     // 构建查询条件
-    let query = ratingCollection.where({
+    const queryCondition = {
       table_id: tableId
-    });
+    };
     
-    // 如果提供了评分人，则按评分人筛选
+    // 如果提供了评分人，则添加评分人筛选条件
     if (rater) {
-      query = query.where({
-        rater: rater
-      });
+      queryCondition.rater = rater;
     }
     
-    // 获取所有评分记录
-    const ratingsResult = await query.get();
+    console.log('最终查询条件:', JSON.stringify(queryCondition));
+    
+    // 使用合并后的条件进行一次查询
+    const ratingsResult = await ratingCollection.where(queryCondition).get();
     
     console.log(`找到${ratingsResult.data.length}条评分记录`);
     
@@ -651,6 +713,188 @@ async function getRatingsByTable(data) {
     return {
       code: -1,
       msg: `获取评分记录失败: ${e.message}`,
+      error: e.message
+    };
+  }
+}
+
+// 获取评分表统计数据
+async function getTableStats(data) {
+  const { table_id } = data;
+  
+  try {
+    // 验证参数
+    if (!table_id) {
+      return {
+        code: -1,
+        msg: '缺少必要参数: table_id'
+      };
+    }
+    
+    // 获取评分表信息
+    const tableInfo = await ratingTableCollection.doc(table_id).get();
+    
+    if (tableInfo.data.length === 0) {
+      return {
+        code: -1,
+        msg: '评分表不存在'
+      };
+    }
+    
+    const table = tableInfo.data[0];
+    
+    // 获取考核对象数量
+    const subjectResult = await subjectCollection.where({
+      table_id: table_id
+    }).count();
+    
+    const subjectCount = subjectResult.total || 0;
+    
+    // 获取评分记录数量
+    const ratingResult = await ratingCollection.where({
+      table_id: table_id
+    }).count();
+    
+    const ratingCount = ratingResult.total || 0;
+    
+    // 计算评分完成率
+    const completionRate = subjectCount > 0 ? Math.round((ratingCount / subjectCount) * 100) : 0;
+    
+    return {
+      code: 0,
+      msg: '获取评分表统计成功',
+      data: {
+        _id: table._id,
+        name: table.name,
+        type: table.type,
+        category: table.category,
+        rater: table.rater,
+        subjectCount: subjectCount,
+        ratingCount: ratingCount,
+        completionRate: completionRate
+      }
+    };
+    
+  } catch (e) {
+    console.error('获取评分表统计失败:', e);
+    return {
+      code: -1,
+      msg: '获取评分表统计失败: ' + e.message,
+      error: e.message
+    };
+  }
+}
+
+// 获取考核对象统计数据
+async function getSubjectStats(data) {
+  const { table_id, page = 1, pageSize = 10 } = data;
+  
+  try {
+    // 验证参数
+    if (!table_id) {
+      return {
+        code: -1,
+        msg: '缺少必要参数: table_id'
+      };
+    }
+    
+    // 获取评分表信息
+    const tableInfo = await ratingTableCollection.doc(table_id).get();
+    
+    if (tableInfo.data.length === 0) {
+      return {
+        code: -1,
+        msg: '评分表不存在'
+      };
+    }
+    
+    const table = tableInfo.data[0];
+    
+    // 获取所有考核对象
+    const subjectResult = await subjectCollection.where({
+      table_id: table_id
+    }).skip((page - 1) * pageSize).limit(pageSize).get();
+    
+    // 获取考核对象总数
+    const countResult = await subjectCollection.where({
+      table_id: table_id
+    }).count();
+    
+    const subjects = subjectResult.data || [];
+    const total = countResult.total || 0;
+    
+    // 获取所有评分记录
+    const ratingResult = await ratingCollection.where({
+      table_id: table_id
+    }).get();
+    
+    const ratings = ratingResult.data || [];
+    
+    // 构建考核对象评分统计
+    const subjectStats = [];
+    
+    for (const subject of subjects) {
+      // 查找该考核对象的评分记录
+      const subjectRatings = ratings.filter(r => r.subject === subject.name);
+      
+      // 计算平均分
+      let totalScore = 0;
+      let maxScore = 100; // 默认满分为100
+      
+      if (subjectRatings.length > 0) {
+        subjectRatings.forEach(rating => {
+          totalScore += rating.total_score || 0;
+        });
+        
+        // 取第一条评分记录的评分项作为满分参考
+        if (subjectRatings[0].scores && subjectRatings[0].scores.length > 0) {
+          maxScore = subjectRatings[0].scores.reduce((total, score) => total + (score.maxScore || 0), 0);
+        }
+      }
+      
+      const avgScore = subjectRatings.length > 0 ? Math.round(totalScore / subjectRatings.length) : 0;
+      
+      // 构建评分项得分明细
+      let scores = [];
+      if (subjectRatings.length > 0 && subjectRatings[0].scores) {
+        scores = subjectRatings[0].scores.map(score => {
+          return {
+            name: score.name,
+            score: score.score,
+            maxScore: score.maxScore
+          };
+        });
+      }
+      
+      subjectStats.push({
+        _id: subject._id,
+        name: subject.name,
+        department: subject.department,
+        position: subject.position,
+        totalScore: avgScore,
+        maxScore: maxScore,
+        ratingCount: subjectRatings.length,
+        scores: scores,
+        comment: subjectRatings.length > 0 ? subjectRatings[0].comment : ''
+      });
+    }
+    
+    return {
+      code: 0,
+      msg: '获取考核对象统计成功',
+      data: {
+        list: subjectStats,
+        total: total,
+        page: page,
+        pageSize: pageSize
+      }
+    };
+    
+  } catch (e) {
+    console.error('获取考核对象统计失败:', e);
+    return {
+      code: -1,
+      msg: '获取考核对象统计失败: ' + e.message,
       error: e.message
     };
   }

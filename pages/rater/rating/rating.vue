@@ -87,14 +87,19 @@
 		</view>
 		
 		<!-- 分数输入弹窗 -->
-		<uni-popup ref="scorePopup" type="dialog">
-			<uni-popup-dialog
-				title="输入分数"
-				:before-close="false"
-				@confirm="confirmScoreInput"
-				@close="closeScoreInput">
-				<input type="number" v-model="inputScore" class="score-popup-input" placeholder="请输入分数(0-100)" />
-			</uni-popup-dialog>
+		<uni-popup ref="popup" type="center" :mask-click="false">
+			<view class="score-popup-container">
+				<view class="score-popup-header">
+					<text class="score-popup-title">输入分数</text>
+				</view>
+				<view class="score-popup-content">
+					<input type="number" v-model="inputScore" class="score-popup-input" placeholder="请输入分数(0-100)" />
+				</view>
+				<view class="score-popup-buttons">
+					<button class="score-popup-button cancel" @click="cancelInput">取消</button>
+					<button class="score-popup-button confirm" @click="confirmInput">确定</button>
+				</view>
+			</view>
 		</uni-popup>
 	</view>
 </template>
@@ -156,6 +161,9 @@
 					uni.navigateBack();
 				}, 1500);
 			}
+		},
+		onReady() {
+			// 不需要手动设置popup属性
 		},
 		methods: {
 			// 获取本地存储的用户信息
@@ -922,34 +930,31 @@
 			// 显示分数输入弹窗
 			showScoreInput() {
 				this.inputScore = this.calculateTotalScore().toString();
-				this.$refs.scorePopup.open();
-			},
-			
-			// 确认分数输入
-			confirmScoreInput() {
-				const score = parseInt(this.inputScore);
-				if (isNaN(score) || score < 0 || score > 100) {
-					uni.showToast({
-						title: '请输入0-100之间的数字',
-						icon: 'none'
-					});
-					return;
+				if (this.$refs.popup) {
+					this.$refs.popup.open();
 				}
-				
-				// 模拟slider的change事件
-				this.handleTotalScoreChange({
-					detail: {
-						value: score
-					}
-				});
-				
-				this.$refs.scorePopup.close();
 			},
 			
-			// 关闭分数输入弹窗
-			closeScoreInput() {
-				// 主动关闭弹窗
-				this.$refs.scorePopup.close();
+			// 取消输入
+			cancelInput() {
+				if (this.$refs.popup) {
+					this.$refs.popup.close();
+				}
+			},
+			
+			// 确认输入
+			confirmInput() {
+				console.log('确认分数输入:', this.inputScore);
+				// 使用输入的值更新分数
+				if (this.inputScore && !isNaN(this.inputScore) && parseInt(this.inputScore) >= 0 && parseInt(this.inputScore) <= 100) {
+					// 使用handleTotalScoreChange来处理总分修改
+					this.handleTotalScoreChange({
+						detail: { value: parseInt(this.inputScore) }
+					});
+				}
+				if (this.$refs.popup) {
+					this.$refs.popup.close();
+				}
 			}
 		}
 	}
@@ -1246,6 +1251,30 @@
 		margin-left: 10rpx;
 	}
 	
+	.score-popup-container {
+		width: 80%;
+		background-color: #fff;
+		border-radius: 16rpx;
+		overflow: hidden;
+		box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.15);
+	}
+	
+	.score-popup-header {
+		padding: 24rpx;
+		text-align: center;
+		border-bottom: 1rpx solid #f2f2f2;
+	}
+	
+	.score-popup-title {
+		font-size: 32rpx;
+		font-weight: bold;
+		color: #333;
+	}
+	
+	.score-popup-content {
+		padding: 30rpx 24rpx;
+	}
+	
 	.score-popup-input {
 		width: 100%;
 		height: 80rpx;
@@ -1254,7 +1283,35 @@
 		padding: 0 20rpx;
 		font-size: 32rpx;
 		text-align: center;
-		margin-top: 20rpx;
+		box-sizing: border-box;
+	}
+	
+	.score-popup-buttons {
+		display: flex;
+		border-top: 1rpx solid #f2f2f2;
+	}
+	
+	.score-popup-button {
+		flex: 1;
+		height: 90rpx;
+		line-height: 90rpx;
+		text-align: center;
+		font-size: 30rpx;
+		margin: 0;
+		border-radius: 0;
+		border: none;
+		background-color: #fff;
+		padding: 0;
+	}
+	
+	.score-popup-button.cancel {
+		color: #666;
+		border-right: 1rpx solid #f2f2f2;
+	}
+	
+	.score-popup-button.confirm {
+		color: #07c160;
+		font-weight: bold;
 	}
 	
 	/* 调整滑块与输入框的布局 */

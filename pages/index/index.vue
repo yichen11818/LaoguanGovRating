@@ -71,7 +71,7 @@
 					<text class="stat-label">评分表数量</text>
 				</view>
 				
-				<view class="stat-card" @click="navigateTo('/pages/rater/history/history')">
+				<view class="stat-card" @click="navigateTo('/pages/rater/tables/tables')">
 					<text class="stat-num">{{raterStats.ratedCount || 0}}</text>
 					<text class="stat-label">已评分数量</text>
 				</view>
@@ -404,7 +404,7 @@
 								}
 							}
 						}).then(statsRes => {
-							console.log('获取评分员统计数据:', statsRes);
+							console.log('获取评分员统计数据:', statsRes.result.data);
 							if (statsRes.result.code === 0) {
 								const statsData = statsRes.result.data;
 								this.raterStats.ratedCount = statsData.completed || 0;

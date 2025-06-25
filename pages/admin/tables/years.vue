@@ -8,6 +8,11 @@
 			</button>
 		</view>
 		
+		<!-- 导出A类评分功能 -->
+		<view class="export-section">
+			<button class="export-btn" @click="exportATypeRatings">导出A类评分汇总表</button>
+		</view>
+		
 		<view class="year-list" v-if="years.length > 0">
 			<view class="year-item" v-for="(year, index) in years" :key="index" @click="navigateToTablesWithYear(year)">
 				<view class="year-card">
@@ -46,6 +51,25 @@
 				</view>
 			</view>
 		</uni-popup>
+		
+		<!-- 导出A类评分弹窗 -->
+		<uni-popup ref="exportPopup" type="center">
+			<view class="popup-content">
+				<view class="popup-title">导出A类评分汇总表</view>
+				<view class="form-item">
+					<text class="form-label">选择年度</text>
+					<picker @change="handleYearChange" :value="exportData.yearIndex" :range="years" range-key="year">
+						<view class="picker-box">
+							<text class="picker-text">{{years[exportData.yearIndex]?.year || '请选择年度'}}</text>
+						</view>
+					</picker>
+				</view>
+				<view class="popup-btns">
+					<button class="cancel-btn" size="mini" @click="hideExportPopup">取消</button>
+					<button class="confirm-btn" size="mini" @click="confirmExport">确定</button>
+				</view>
+			</view>
+		</uni-popup>
 	</view>
 </template>
 
@@ -58,6 +82,11 @@
 				formData: {
 					year: new Date().getFullYear().toString(), // 默认当前年份
 					description: ''
+				},
+				exportData: {
+					yearIndex: 0,
+					year: null,
+					group_id: null
 				}
 			}
 		},
@@ -80,6 +109,12 @@
 					
 					if (result.result.code === 0) {
 						this.years = result.result.data;
+						// 默认选择第一个年度
+						if (this.years.length > 0) {
+							this.exportData.yearIndex = 0;
+							this.exportData.year = this.years[0].year;
+							this.exportData.group_id = this.years[0]._id;
+						}
 					} else {
 						uni.showToast({
 							title: '获取数据失败',
@@ -182,6 +217,113 @@
 						icon: 'none'
 					});
 				}
+			},
+			
+			// 导出A类评分表相关方法
+			exportATypeRatings() {
+				this.$refs.exportPopup.open();
+			},
+			
+			// 隐藏导出弹窗
+			hideExportPopup() {
+				this.$refs.exportPopup.close();
+			},
+			
+			// 选择年度变化
+			handleYearChange(e) {
+				const index = e.detail.value;
+				this.exportData.yearIndex = index;
+				this.exportData.year = this.years[index].year;
+				this.exportData.group_id = this.years[index]._id;
+			},
+			
+			// 确认导出
+			async confirmExport() {
+				if (!this.exportData.year) {
+					uni.showToast({
+						title: '请选择年度',
+						icon: 'none'
+					});
+					return;
+				}
+				
+				uni.showLoading({
+					title: '正在导出...'
+				});
+				
+				try {
+					// 调用云函数导出A类评分汇总
+					const result = await uniCloud.callFunction({
+						name: 'ratingTable',
+						data: {
+							action: 'exportATypeRatings',
+							data: {
+								group_id: this.exportData.group_id,
+								year: this.exportData.year
+							}
+						}
+					});
+					
+					if (result.result.code === 0) {
+						// 下载导出的文件
+						const fileUrl = result.result.data.fileUrl;
+						
+						// 在浏览器环境下提示下载链接
+						// #ifdef H5
+						window.open(fileUrl, '_blank');
+						// #endif
+						
+						// 在APP环境下下载文件
+						// #ifdef APP-PLUS
+						uni.showToast({
+							title: '导出成功，正在下载...',
+							icon: 'none',
+							duration: 2000
+						});
+						
+						// 下载文件到手机
+						const downloadTask = uni.downloadFile({
+							url: fileUrl,
+							success: (res) => {
+								if (res.statusCode === 200) {
+									uni.saveFile({
+										tempFilePath: res.tempFilePath,
+										success: (saveRes) => {
+											uni.openDocument({
+												filePath: saveRes.savedFilePath,
+												success: () => {
+													console.log('打开文档成功');
+												}
+											});
+										},
+										fail: (err) => {
+											console.error('保存文件失败:', err);
+										}
+									});
+								}
+							},
+							fail: (err) => {
+								console.error('下载文件失败:', err);
+							}
+						});
+						// #endif
+						
+						this.hideExportPopup();
+					} else {
+						uni.showToast({
+							title: result.result.msg || '导出失败',
+							icon: 'none'
+						});
+					}
+				} catch (e) {
+					console.error('导出A类评分汇总表失败:', e);
+					uni.showToast({
+						title: '导出失败',
+						icon: 'none'
+					});
+				} finally {
+					uni.hideLoading();
+				}
 			}
 		}
 	}
@@ -204,7 +346,7 @@
 		font-weight: bold;
 	}
 	
-	.add-btn {
+	.add-btn, .export-btn {
 		background-color: #007AFF;
 		color: #FFFFFF;
 		font-size: 28rpx;
@@ -212,6 +354,17 @@
 		border-radius: 30rpx;
 		display: flex;
 		align-items: center;
+	}
+	
+	.export-btn {
+		background-color: #0A8D2E;
+		margin-bottom: 20rpx;
+	}
+	
+	.export-section {
+		display: flex;
+		justify-content: flex-start;
+		margin-bottom: 20rpx;
 	}
 	
 	.btn-icon {
@@ -313,13 +466,15 @@
 		margin-bottom: 10rpx;
 	}
 	
-	.form-input {
+	.form-input, .picker-box {
 		width: 100%;
 		height: 80rpx;
 		border: 1px solid #DDDDDD;
 		border-radius: 8rpx;
 		padding: 0 20rpx;
 		font-size: 28rpx;
+		display: flex;
+		align-items: center;
 	}
 	
 	.popup-btns {

@@ -379,7 +379,7 @@
 					{ id: 2, name: 'A类驻村工作评分' },
 					{ id: 3, name: 'B类分管班子评分' },
 					{ id: 4, name: 'B类驻村工作评分' },
-					{ id: 5, name: 'B类办主任评分' }
+					{ id: 5, name: 'A类办主任评分' }
 				],
 				// 添加分类选项
 				categoryOptions: [

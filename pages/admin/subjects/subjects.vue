@@ -66,23 +66,6 @@
 				<text class="form-label">职位</text>
 				<input v-model="formData.position" class="form-input" placeholder="请输入职位" />
 			</view>
-			<view class="form-item">
-				<text class="form-label">所属评分表</text>
-				<view class="table-selector">
-					<view class="selected-tables">
-						<view class="selected-table" v-for="(table, index) in formData.selectedTables" :key="index">
-							<text>{{table.name}}</text>
-							<text class="remove-table" @click="removeSelectedTable(index)">×</text>
-						</view>
-					</view>
-					<picker @change="handleFormTableChange" :value="formData.tableIndex" :range="tables" range-key="name">
-						<view class="form-picker">
-							<text>选择评分表</text>
-							<text class="picker-arrow">▼</text>
-						</view>
-					</picker>
-				</view>
-			</view>
 			<view class="popup-btns">
 				<button class="cancel-btn" size="mini" @click="hideAddSubjectPopup">取消</button>
 				<button class="confirm-btn" size="mini" @click="submitAddSubject">确定</button>

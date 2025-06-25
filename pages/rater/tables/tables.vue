@@ -326,12 +326,26 @@
 				const prevUsername = this.username;
 				this.username = this.ensureUsername();
 				
+				console.log('===开始加载评分员表格===');
+				console.log('当前用户名:', this.username);
+				console.log('当前筛选类型索引:', this.currentTypeIndex);
+				console.log('当前筛选类型值:', type);
+				console.log('当前页码:', this.page);
+				console.log('每页大小:', this.pageSize);
+				
 				// 如果没有获取到用户名，可以直接返回
 				if (!this.username) {
+					console.error('未获取到用户名，无法加载表格');
 					this.isLoading = false;
 					if (typeof callback === 'function') {
 						callback();
 					}
+					
+					uni.showToast({
+						title: '未获取到用户信息，请重新登录',
+						icon: 'none',
+						duration: 2000
+					});
 					return;
 				}
 				
@@ -341,26 +355,62 @@
 				
 				// 获取当前登录用户的token
 				const token = uni.getStorageSync('uni_id_token') || '';
+				console.log('当前token是否存在:', !!token);
+				
+				// 构建请求参数
+				const requestData = {
+					action: 'getRaterTables',
+					data: {
+						type: type,
+						page: this.page,
+						pageSize: this.pageSize,
+						username: this.username,
+						rater: this.username,
+						uniIdToken: token
+					}
+				};
+				
+				console.log('请求参数:', JSON.stringify(requestData));
 				
 				uniCloud.callFunction({
 					name: 'ratingTable',
-					data: {
-						action: 'getRaterTables',
-						data: {
-							type: type,
-							page: this.page,
-							pageSize: this.pageSize,
-							username: this.username,
-							rater: this.username,
-							uniIdToken: token
-						}
-					}
+					data: requestData
 				}).then(res => {
 					uni.hideLoading();
 					this.isLoading = false;
 					
+					console.log('表格查询结果:', JSON.stringify(res.result));
+					
 					if (res.result && res.result.code === 0) {
 						const data = res.result.data || { list: [], total: 0 };
+						
+						// 检查返回的数据
+						console.log('返回表格数量:', data.list ? data.list.length : 0);
+						console.log('总记录数:', data.total);
+						
+						// 如果没有数据，显示提示
+						if ((!data.list || data.list.length === 0) && this.page === 1) {
+							console.log('未找到评分表，可能原因:');
+							console.log('1. 此用户没有被分配评分表');
+							console.log('2. 筛选条件导致没有匹配的评分表');
+							console.log('3. 数据库中的表格记录已被删除');
+							
+							// 尝试清除筛选并重新查询
+							if (this.currentTypeIndex !== 0) {
+								console.log('提示用户尝试清除筛选条件');
+								uni.showToast({
+									title: '未找到匹配的评分表，尝试清除筛选条件',
+									icon: 'none',
+									duration: 3000
+								});
+							} else {
+								uni.showToast({
+									title: '未找到分配给您的评分表',
+									icon: 'none',
+									duration: 2000
+								});
+							}
+						}
 						
 						if (this.page === 1) {
 							this.tables = data.list || [];
@@ -372,13 +422,24 @@
 						this.hasMoreData = (this.tables && this.tables.length) < this.total;
 					} else {
 						// 检查是否是因为登录问题
+						const errorMsg = res.result && res.result.msg ? res.result.msg : '加载失败';
+						console.error('加载表格错误:', errorMsg);
+						
 						if (res.result && res.result.msg && res.result.msg.includes('登录')) {
 							// 不立即跳转，由onLoad或onShow统一处理
+							uni.showToast({
+								title: '登录信息失效，请重新登录',
+								icon: 'none',
+								duration: 2000
+							});
 						} else {
 							uni.showToast({
-								title: res.result && res.result.msg ? res.result.msg : '加载失败',
+								title: errorMsg,
 								icon: 'none'
 							});
+							
+							// 如果是其他错误，尝试检查用户信息
+							this.checkUserInfo();
 						}
 					}
 					
@@ -388,6 +449,9 @@
 				}).catch(err => {
 					uni.hideLoading();
 					this.isLoading = false;
+					
+					console.error('加载表格异常:', err);
+					
 					uni.showToast({
 						title: '加载失败，请检查网络',
 						icon: 'none'
@@ -396,6 +460,51 @@
 					if (typeof callback === 'function') {
 						callback();
 					}
+				});
+			},
+			
+			// 新增方法：检查用户信息
+			checkUserInfo() {
+				console.log('开始检查用户信息');
+				const token = uni.getStorageSync('uni_id_token') || '';
+				const username = this.username;
+				
+				if (!token || !username) {
+					console.log('本地无token或用户名，无需检查');
+					return;
+				}
+				
+				uniCloud.callFunction({
+					name: 'user',
+					data: {
+						action: 'getUserInfo',
+						data: {
+							username: username,
+							uniIdToken: token
+						}
+					}
+				}).then(res => {
+					if (res.result && res.result.code === 0) {
+						console.log('用户信息检查成功');
+						const userInfo = res.result.data;
+						
+						// 检查assignedTables
+						const assignedTables = userInfo.assignedTables || [];
+						console.log('用户分配的评分表数量:', assignedTables.length);
+						console.log('分配的评分表IDs:', JSON.stringify(assignedTables));
+						
+						if (assignedTables.length === 0) {
+							uni.showToast({
+								title: '您没有被分配评分表，请联系管理员',
+								icon: 'none',
+								duration: 2000
+							});
+						}
+					} else {
+						console.error('用户信息检查失败:', res.result.msg);
+					}
+				}).catch(err => {
+					console.error('用户信息检查异常:', err);
 				});
 			},
 			

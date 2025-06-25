@@ -4,6 +4,8 @@ const ratingTableCollection = db.collection('rating_tables');
 const userCollection = db.collection('users');
 const subjectCollection = db.collection('subjects');
 const groupCollection = db.collection('rating_groups');
+const ratingCollection = db.collection('ratings');
+const xlsx = require('node-xlsx');
 
 exports.main = async (event, context) => {
   const { action, data } = event;
@@ -38,6 +40,8 @@ exports.main = async (event, context) => {
       return await deleteGroup(data);
     case 'getGroups':
       return await getGroups(data);
+    case 'exportATypeRatings':
+      return await exportATypeRatings(data);
     default:
       return {
         code: -1,
@@ -206,6 +210,70 @@ async function updateTable(data) {
           code: -1,
           msg: '表格组不存在'
         };
+      }
+    }
+    
+    // 检查是否更新了评分人，如果是，需要更新新旧评分人的表格分配
+    if (tableUpdateData.rater) {
+      console.log(`检测到评分人变更，新评分人: ${tableUpdateData.rater}`);
+      
+      // 首先获取当前表格信息
+      const tableInfo = await ratingTableCollection.doc(tableId).get();
+      if (tableInfo.data.length === 0) {
+        return {
+          code: -1,
+          msg: '评分表不存在'
+        };
+      }
+      
+      const oldRater = tableInfo.data[0].rater;
+      const newRater = tableUpdateData.rater;
+      
+      // 如果新旧评分人不同，才需要更新
+      if (oldRater !== newRater) {
+        console.log(`评分人从 ${oldRater} 变更为 ${newRater}`);
+        
+        // 检查新评分人是否存在
+        const newUserInfo = await userCollection.where({
+          username: newRater
+        }).get();
+        
+        if (newUserInfo.data.length === 0) {
+          return {
+            code: -1,
+            msg: '新评分人不存在'
+          };
+        }
+        
+        // 更新旧评分人的表格分配，移除该表
+        if (oldRater) {
+          const oldUserInfo = await userCollection.where({
+            username: oldRater
+          }).get();
+          
+          if (oldUserInfo.data.length > 0) {
+            const oldUser = oldUserInfo.data[0];
+            const oldAssignedTables = oldUser.assignedTables || [];
+            const updatedOldTables = oldAssignedTables.filter(id => id !== tableId);
+            
+            await userCollection.doc(oldUser._id).update({
+              assignedTables: updatedOldTables
+            });
+            console.log(`已从旧评分人 ${oldRater} 的分配表中移除表格 ${tableId}`);
+          }
+        }
+        
+        // 更新新评分人的表格分配，添加该表
+        const newUser = newUserInfo.data[0];
+        const newAssignedTables = newUser.assignedTables || [];
+        if (!newAssignedTables.includes(tableId)) {
+          newAssignedTables.push(tableId);
+          
+          await userCollection.doc(newUser._id).update({
+            assignedTables: newAssignedTables
+          });
+          console.log(`已将表格 ${tableId} 添加到新评分人 ${newRater} 的分配表中`);
+        }
       }
     }
     
@@ -687,34 +755,46 @@ async function getRaterTables(data, context) {
   const { type, page = 1, pageSize = 10 } = data;
   
   try {
+    console.log('=== 开始获取评分员表 ===');
+    console.log('请求参数:', JSON.stringify(data));
+    console.log('上下文信息:', JSON.stringify(context));
+    
     let username = null;
     
     // 方法1: 直接从data中获取用户名
     if (data.username) {
       username = data.username;
+      console.log('从请求参数中获取到用户名:', username);
     }
     
     // 方法2: 从token中获取用户信息(如果有)
     if (!username) {
       try {
         const clientInfo = context.CLIENTINFO || "{}";
+        console.log('客户端信息:', clientInfo);
         const parsedClientInfo = JSON.parse(clientInfo);
         const uniIdToken = parsedClientInfo.uniIdToken;
         
         if (uniIdToken) {
+          console.log('从上下文中获取到token');
           const payload = uniCloud.parseToken(uniIdToken);
           username = payload.uid;
+          console.log('从上下文token解析出用户名:', username);
+        } else {
+          console.log('上下文中未找到token');
         }
       } catch (e) {
-        console.error('解析token失败', e);
+        console.error('解析上下文token失败', e);
       }
     }
     
     // 如果没有获取到用户名，尝试从环境获取当前用户
     if (!username && data.uniIdToken) {
       try {
+        console.log('尝试从请求参数的token中获取用户名');
         const payload = uniCloud.parseToken(data.uniIdToken);
         username = payload.uid;
+        console.log('从请求参数token解析出用户名:', username);
       } catch (e) {
         console.error('解析前端传递的token失败', e);
       }
@@ -723,22 +803,30 @@ async function getRaterTables(data, context) {
     // 如果仍然没有获取到用户名，检查是否在本地调试模式下，使用请求中的rater参数
     if (!username && data.rater) {
       username = data.rater;
+      console.log('使用rater参数作为用户名:', username);
     }
     
     // 如果仍然没有获取到用户名，返回错误
     if (!username) {
+      console.error('未获取到用户名，无法继续查询');
       return {
         code: -1,
         msg: '用户未登录或登录已过期，请重新登录 - 请在data中传入username或rater参数'
       };
     }
     
+    console.log('最终使用的用户名:', username);
+    
     // 查询用户信息
+    console.log('开始查询用户信息:', username);
     const userInfo = await userCollection.where({
       username: username
     }).get();
     
+    console.log('查询到用户信息结果:', JSON.stringify(userInfo.data));
+    
     if (userInfo.data.length === 0) {
+      console.error(`用户 ${username} 不存在于数据库中`);
       return {
         code: -1,
         msg: `用户 ${username} 不存在`
@@ -749,55 +837,200 @@ async function getRaterTables(data, context) {
     const rater = user.username;
     const assignedTables = user.assignedTables || [];
     
-    // 如果没有分配的评分表
+    console.log('用户ID:', user._id);
+    console.log('评分员用户名:', rater);
+    console.log('分配的评分表数量:', assignedTables.length);
+    console.log('评分表IDs:', JSON.stringify(assignedTables));
+    
+    let query;
+    let tableIds = [];
+    let fromDirectQuery = false;
+    
+    // 如果assignedTables为空或不存在，直接从rating_tables表中查询
     if (assignedTables.length === 0) {
-      return {
-        code: 0,
-        msg: '获取评分表列表成功',
-        data: {
-          list: [],
-          total: 0,
-          page,
-          pageSize
-        }
-      };
-    }
-    
-    // 查询评委的评分表
-    let query = ratingTableCollection.where({
-      _id: db.command.in(assignedTables)
-    });
-    
-    // 筛选条件
-    if (type) {
-      query = query.where({
-        type
+      console.log('用户assignedTables为空，尝试从rating_tables表直接查询该用户负责的表格');
+      fromDirectQuery = true;
+      
+      // 直接查找以该用户为评分人的表格
+      query = ratingTableCollection.where({
+        rater: username
       });
+      
+      // 添加类型筛选
+      if (type) {
+        query = query.where({
+          type
+        });
+      }
+      
+      // 先获取所有匹配表格的ID，用于后续更新用户的assignedTables字段
+      const allTables = await query.field('_id').get();
+      if (allTables.data.length > 0) {
+        tableIds = allTables.data.map(table => table._id);
+        console.log(`直接从rating_tables查询到${tableIds.length}个表格:`, JSON.stringify(tableIds));
+        
+        // 更新用户的assignedTables字段
+        if (tableIds.length > 0) {
+          console.log(`尝试更新用户${username}的assignedTables字段`);
+          try {
+            await userCollection.doc(user._id).update({
+              assignedTables: tableIds
+            });
+            console.log('更新用户assignedTables成功');
+          } catch (updateErr) {
+            console.error('更新用户assignedTables失败:', updateErr);
+          }
+        }
+      } else {
+        console.log('直接查询未找到任何表格');
+        return {
+          code: 0,
+          msg: '获取评分表列表成功',
+          data: {
+            list: [],
+            total: 0,
+            page,
+            pageSize
+          }
+        };
+      }
+    } else {
+      console.log('使用用户assignedTables中的表格ID查询');
+      // 使用assignedTables中的ID查询
+      query = ratingTableCollection.where({
+        _id: db.command.in(assignedTables)
+      });
+      
+      // 筛选条件
+      if (type) {
+        query = query.where({
+          type
+        });
+        console.log('添加类型筛选:', type);
+      }
     }
+    
+    // 执行查询前，记录查询条件
+    console.log('分页参数: page=' + page + ', pageSize=' + pageSize);
+    console.log('查询起始索引:', (page - 1) * pageSize);
     
     // 分页查询
     const tableList = await query.skip((page - 1) * pageSize).limit(pageSize).get();
     
+    console.log('查询到的评分表数量:', tableList.data.length);
+    if (tableList.data.length === 0) {
+      console.log('未查询到评分表，可能原因:');
+      
+      if (fromDirectQuery) {
+        console.log('直接查询未找到表格，用户可能确实没有分配表格');
+      } else {
+        console.log('1. 分配的评分表ID已经不存在');
+        console.log('2. 类型筛选条件不匹配');
+        console.log('3. 分页参数超出实际范围');
+        
+        // 不使用筛选条件再查询一次，确认表是否真的存在
+        const checkTables = await ratingTableCollection.where({
+          _id: db.command.in(assignedTables)
+        }).get();
+        
+        console.log('不使用筛选条件查询结果:', checkTables.data.length);
+        if (checkTables.data.length > 0) {
+          console.log('存在评分表，但可能类型不匹配。存在的表类型:');
+          checkTables.data.forEach(t => {
+            console.log(`表ID: ${t._id}, 表名: ${t.name}, 类型: ${t.type}`);
+          });
+        } else {
+          console.log('评分表ID不存在于数据库中，需要检查user表中的assignedTables是否过期');
+          
+          // 如果通过assignedTables没找到表，尝试直接根据rater字段查询
+          console.log('尝试直接查询该用户为rater的表格');
+          const directQuery = ratingTableCollection.where({
+            rater: username
+          });
+          
+          if (type) {
+            directQuery.where({ type });
+          }
+          
+          const directResult = await directQuery.get();
+          
+          if (directResult.data.length > 0) {
+            console.log(`通过rater字段找到${directResult.data.length}个表格，尝试修复用户的assignedTables`);
+            
+            // 获取表格ID
+            const directTableIds = directResult.data.map(t => t._id);
+            
+            // 更新用户的assignedTables字段
+            try {
+              await userCollection.doc(user._id).update({
+                assignedTables: directTableIds
+              });
+              console.log('修复用户assignedTables成功');
+              
+              // 使用找到的表重新构建结果
+              if ((page - 1) * pageSize < directResult.data.length) {
+                // 取出当前页的数据
+                const startIdx = (page - 1) * pageSize;
+                const endIdx = Math.min(startIdx + pageSize, directResult.data.length);
+                const pageData = directResult.data.slice(startIdx, endIdx);
+                
+                // 将找到的表格赋值给tableList进行后续处理
+                tableList.data = pageData;
+                console.log(`返回第${page}页数据，共${pageData.length}条`);
+              }
+            } catch (updateErr) {
+              console.error('修复用户assignedTables失败:', updateErr);
+            }
+          } else {
+            console.log('通过rater字段也未找到表格，确认用户没有被分配表格');
+          }
+        }
+      }
+      
+      if (tableList.data.length === 0) {
+        return {
+          code: 0,
+          msg: '获取评分表列表成功',
+          data: {
+            list: [],
+            total: 0,
+            page,
+            pageSize
+          }
+        };
+      }
+    }
+    
     // 获取总数
     const countResult = await query.count();
+    console.log('符合条件的总评分表数量:', countResult.total);
     
     // 丰富表格数据，添加考核对象和完成情况
+    console.log('开始丰富评分表数据');
     const enrichedList = await Promise.all(tableList.data.map(async (table) => {
+      console.log(`处理表: ${table._id}, ${table.name}`);
+      
       // 获取该表的考核对象
       const subjects = await subjectCollection.where({
         table_id: db.command.in([table._id])
       }).get();
       
+      console.log(`表${table._id}的考核对象数量:`, subjects.data.length);
+      
       // 获取该表的评分记录
-      const ratings = await db.collection('ratings').where({
+      const ratings = await ratingCollection.where({
         table_id: table._id,
         rater
       }).get();
+      
+      console.log(`表${table._id}的评分记录数量:`, ratings.data.length);
       
       // 计算完成率
       const subjectCount = subjects.data.length;
       const ratedCount = ratings.data.length;
       const completionRate = subjectCount > 0 ? Math.floor((ratedCount / subjectCount) * 100) : 0;
+      
+      console.log(`表${table._id}的完成率: ${completionRate}%`);
       
       // 添加评分状态到考核对象
       const subjectsWithStatus = subjects.data.map(subject => {
@@ -818,6 +1051,7 @@ async function getRaterTables(data, context) {
       };
     }));
     
+    console.log('数据处理完成，返回结果');
     return {
       code: 0,
       msg: '获取评分表列表成功',
@@ -829,6 +1063,7 @@ async function getRaterTables(data, context) {
       }
     };
   } catch (e) {
+    console.error('获取评分表列表失败，错误详情:', e);
     return {
       code: -1,
       msg: '获取评分表列表失败',
@@ -1021,6 +1256,369 @@ async function getGroups(data) {
     return {
       code: -1,
       msg: '获取表格组列表失败',
+      error: e.message
+    };
+  }
+}
+
+// 导出A类评分汇总表
+async function exportATypeRatings(data) {
+  const { group_id, year } = data;
+  
+  try {
+    console.log(`开始导出${year}年度A类评分汇总表`);
+    
+    // 参数校验
+    if (!group_id || !year) {
+      return {
+        code: -1,
+        msg: '缺少必要参数'
+      };
+    }
+    
+    // 获取A类班子评分表和驻村工作评分表
+    const tablesResult = await ratingTableCollection.where({
+      group_id,
+      type: 1, // A类评分表
+      $or: [
+        { category: db.RegExp({regexp: '.*班子.*', options: 'i'}) },
+        { category: db.RegExp({regexp: '.*驻村.*', options: 'i'}) }
+      ]
+    }).get();
+    
+    if (tablesResult.data.length === 0) {
+      return {
+        code: -1,
+        msg: '未找到A类评分表'
+      };
+    }
+    
+    const tables = tablesResult.data;
+    
+    // 分类处理班子评分表和驻村工作评分表
+    const banziTable = tables.find(table => {
+      return table.category && (
+        table.category.includes('班子') || 
+        table.name.includes('班子')
+      );
+    });
+    
+    const zhucunTable = tables.find(table => {
+      return table.category && (
+        table.category.includes('驻村') || 
+        table.name.includes('驻村')
+      );
+    });
+    
+    if (!banziTable) {
+      return {
+        code: -1,
+        msg: '未找到班子评分表'
+      };
+    }
+    
+    // 获取所有考核对象（以班子评分表为准）
+    const subjectsResult = await subjectCollection.where({
+      table_id: db.command.all([banziTable._id])
+    }).get();
+    
+    if (subjectsResult.data.length === 0) {
+      return {
+        code: -1,
+        msg: '未找到考核对象'
+      };
+    }
+    
+    const subjects = subjectsResult.data;
+    
+    // 获取班子评分表的所有评分记录
+    const banziRatingsResult = await ratingCollection.where({
+      table_id: banziTable._id
+    }).get();
+    
+    // 获取驻村工作评分表的所有评分记录（如果有）
+    let zhucunRatingsResult = { data: [] };
+    if (zhucunTable) {
+      zhucunRatingsResult = await ratingCollection.where({
+        table_id: zhucunTable._id
+      }).get();
+    }
+    
+    // 构建评分数据，按照考核对象进行整合
+    const ratingData = {};
+    const banziRaters = new Set(); // 收集所有班子评分人
+    
+    // 处理班子评分数据
+    for (const rating of banziRatingsResult.data) {
+      if (!ratingData[rating.subject]) {
+        ratingData[rating.subject] = {
+          banziRatings: {},
+          zhucunRatings: {}
+        };
+      }
+      ratingData[rating.subject].banziRatings[rating.rater] = rating.total_score;
+      banziRaters.add(rating.rater);
+    }
+    
+    // 处理驻村工作评分数据
+    const zhucunScoresBySubject = {}; // 每个考核对象的驻村评分
+    const zhucunRaters = new Set(); // 收集所有驻村工作评分人
+    
+    if (zhucunTable) {
+      for (const rating of zhucunRatingsResult.data) {
+        if (!ratingData[rating.subject]) {
+          ratingData[rating.subject] = {
+            banziRatings: {},
+            zhucunRatings: {}
+          };
+        }
+        ratingData[rating.subject].zhucunRatings[rating.rater] = rating.total_score;
+        zhucunRaters.add(rating.rater);
+        
+        if (!zhucunScoresBySubject[rating.subject]) {
+          zhucunScoresBySubject[rating.subject] = [];
+        }
+        zhucunScoresBySubject[rating.subject].push(rating.total_score);
+      }
+    }
+    
+    // 计算驻村工作评分的平均分
+    let zhucunAverageScore = 0;
+    let zhucunTotalScores = 0;
+    let zhucunScoreCount = 0;
+    
+    // 计算所有驻村评分的平均分
+    for (const subject in zhucunScoresBySubject) {
+      const scores = zhucunScoresBySubject[subject];
+      if (scores.length > 0) {
+        const sum = scores.reduce((acc, score) => acc + score, 0);
+        zhucunTotalScores += sum;
+        zhucunScoreCount += scores.length;
+      }
+    }
+    
+    if (zhucunScoreCount > 0) {
+      zhucunAverageScore = zhucunTotalScores / zhucunScoreCount;
+    }
+    
+    // 转换评分人集合为数组
+    const banziRaterArray = Array.from(banziRaters);
+    const zhucunRaterArray = Array.from(zhucunRaters);
+    
+    // 创建Excel工作表数据
+    const worksheetData = [];
+    
+    // 表头
+    const title = `老关镇${year}年度绩效考核评分汇总表（A类）`;
+    worksheetData.push([title]);
+    
+    // 表头第二行
+    const header2 = ['序号', '姓名'];
+    
+    // 添加班子评分人
+    header2.push('班子评分');
+    for (let i = 0; i < banziRaterArray.length; i++) {
+      header2.push('');
+    }
+    
+    // 班子评分小计
+    header2.push('班子评分平均分');
+    
+    // 添加驻村工作评分人
+    header2.push('驻村工作评分');
+    if (zhucunRaterArray.length > 0) {
+      for (let i = 0; i < zhucunRaterArray.length; i++) {
+        header2.push('');
+      }
+      // 驻村工作评分小计
+      header2.push('驻村工作评分平均分');
+    } else {
+      header2.push(''); // 只占一列
+    }
+    
+    // 总分列
+    header2.push('总分（按班子：驻村=7：3换算）');
+    
+    // 备注列
+    header2.push('备注');
+    
+    worksheetData.push(header2);
+    
+    // 表头第三行（具体评分人）
+    const header3 = ['', ''];
+    
+    // 添加班子评分人姓名
+    for (let i = 0; i < banziRaterArray.length; i++) {
+      const rater = banziRaterArray[i];
+      const userInfo = await userCollection.where({ username: rater }).get();
+      const raterName = userInfo.data.length > 0 ? userInfo.data[0].name : rater;
+      header3.push(raterName);
+    }
+    
+    // 班子评分平均分列
+    header3.push('');
+    
+    // 添加驻村工作评分人姓名
+    if (zhucunRaterArray.length > 0) {
+      for (let i = 0; i < zhucunRaterArray.length; i++) {
+        const rater = zhucunRaterArray[i];
+        const userInfo = await userCollection.where({ username: rater }).get();
+        const raterName = userInfo.data.length > 0 ? userInfo.data[0].name : rater;
+        header3.push(raterName);
+      }
+    } else {
+      header3.push(''); // 只占一列
+    }
+    
+    // 驻村工作评分平均分列
+    if (zhucunRaterArray.length > 0) {
+      header3.push('');
+    }
+    
+    // 总分和备注列
+    header3.push('');
+    header3.push('');
+    
+    worksheetData.push(header3);
+    
+    // 添加考核对象的评分数据
+    for (let i = 0; i < subjects.length; i++) {
+      const subject = subjects[i];
+      const subjectName = subject.name;
+      const subjectRatingData = ratingData[subjectName] || { banziRatings: {}, zhucunRatings: {} };
+      
+      const row = [];
+      row.push(i + 1); // 序号
+      row.push(subjectName); // 姓名
+      
+      // 添加班子评分
+      let banziTotalScore = 0;
+      let banziScoreCount = 0;
+      
+      for (const rater of banziRaterArray) {
+        const score = subjectRatingData.banziRatings[rater] || '';
+        row.push(score);
+        if (score) {
+          banziTotalScore += score;
+          banziScoreCount++;
+        }
+      }
+      
+      // 班子评分平均分
+      const banziAvgScore = banziScoreCount > 0 ? (banziTotalScore / banziScoreCount).toFixed(2) : '';
+      row.push(banziAvgScore);
+      
+      // 添加驻村工作评分
+      let zhucunTotalScore = 0;
+      let zhucunScoreCount = 0;
+      
+      if (zhucunRaterArray.length > 0) {
+        for (const rater of zhucunRaterArray) {
+          const score = subjectRatingData.zhucunRatings[rater] || '';
+          row.push(score);
+          if (score) {
+            zhucunTotalScore += score;
+            zhucunScoreCount++;
+          }
+        }
+        
+        // 如果没有驻村评分，使用所有人的平均分
+        let zhucunAvgScore = '';
+        if (zhucunScoreCount > 0) {
+          zhucunAvgScore = (zhucunTotalScore / zhucunScoreCount).toFixed(2);
+        } else if (banziScoreCount > 0 && zhucunAverageScore > 0) {
+          // 如果此人没有驻村评分但有班子评分，使用全局驻村平均分
+          zhucunAvgScore = zhucunAverageScore.toFixed(2);
+        }
+        
+        row.push(zhucunAvgScore);
+      } else {
+        row.push(''); // 只占一列
+      }
+      
+      // 计算总分（班子70%+驻村30%）
+      let totalScore = '';
+      if (banziAvgScore) {
+        let calculatedZhucunScore = '';
+        
+        // 驻村评分处理
+        if (zhucunRaterArray.length > 0 && zhucunScoreCount > 0) {
+          calculatedZhucunScore = (zhucunTotalScore / zhucunScoreCount).toFixed(2);
+        } else if (zhucunAverageScore > 0) {
+          calculatedZhucunScore = zhucunAverageScore.toFixed(2);
+        }
+        
+        if (calculatedZhucunScore) {
+          totalScore = (parseFloat(banziAvgScore) * 0.7 + parseFloat(calculatedZhucunScore) * 0.3).toFixed(2);
+        } else {
+          totalScore = banziAvgScore; // 如果没有驻村评分，直接使用班子评分
+        }
+      }
+      
+      row.push(totalScore);
+      
+      // 备注列
+      row.push('');
+      
+      worksheetData.push(row);
+    }
+    
+    // 生成Excel文件
+    const options = {
+      '!cols': [
+        { wch: 5 }, // 序号
+        { wch: 15 }, // 姓名
+      ]
+    };
+    
+    // 添加班子评分人列宽
+    for (let i = 0; i < banziRaterArray.length; i++) {
+      options['!cols'].push({ wch: 10 });
+    }
+    options['!cols'].push({ wch: 15 }); // 班子评分平均分
+    
+    // 添加驻村工作评分人列宽
+    if (zhucunRaterArray.length > 0) {
+      for (let i = 0; i < zhucunRaterArray.length; i++) {
+        options['!cols'].push({ wch: 10 });
+      }
+      options['!cols'].push({ wch: 15 }); // 驻村工作评分平均分
+    } else {
+      options['!cols'].push({ wch: 15 }); // 只占一列
+    }
+    
+    options['!cols'].push({ wch: 30 }); // 总分
+    options['!cols'].push({ wch: 15 }); // 备注
+    
+    const buffer = xlsx.build([{
+      name: `A类评分汇总表-${year}年`,
+      data: worksheetData
+    }], options);
+    
+    // 将Excel文件上传到云存储
+    const uploadResult = await uniCloud.uploadFile({
+      cloudPath: `exports/A类评分汇总表-${year}年-${Date.now()}.xlsx`,
+      fileContent: buffer
+    });
+    
+    // 生成临时下载链接
+    const fileUrl = await uniCloud.getTempFileURL({
+      fileList: [uploadResult.fileID]
+    });
+    
+    return {
+      code: 0,
+      msg: '导出成功',
+      data: {
+        fileUrl: fileUrl.fileList[0].tempFileURL
+      }
+    };
+    
+  } catch (e) {
+    console.error('导出A类评分汇总表失败:', e);
+    return {
+      code: -1,
+      msg: '导出A类评分汇总表失败: ' + e.message,
       error: e.message
     };
   }
