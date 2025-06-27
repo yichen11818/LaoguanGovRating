@@ -43,7 +43,7 @@
 				</view>
 				<view class="form-item">
 					<text class="form-label">备注说明</text>
-					<input v-model="formData.description" class="form-input" placeholder="可选：分组说明" />
+					<input v-model="formData.description" class="form-input" placeholder="请输入识别标识（如：第一季度/上半年）" />
 				</view>
 				<view class="popup-btns">
 					<button class="cancel-btn" size="mini" @click="hideAddGroupPopup">取消</button>
@@ -237,6 +237,46 @@
 				this.exportData.group_id = this.years[index]._id;
 			},
 			
+			// 检查是否有A类评分表（通过云函数检查，避免权限问题）
+			async checkATypeRatings() {
+				try {
+					// 使用云函数检查是否有A类评分表
+					const result = await uniCloud.callFunction({
+						name: 'ratingTable',
+						data: {
+							action: 'checkATypeRatings',
+							data: {
+								group_id: this.exportData.group_id,
+								year: this.exportData.year
+							}
+						}
+					});
+					
+					console.log('检查A类评分表结果:', result.result);
+					
+					if (result.result.code === 0) {
+						return {
+							success: true,
+							count: result.result.count || 0,
+							hasATypeRatings: result.result.hasATypeRatings || false,
+							hasBanziTable: result.result.hasBanziTable || false,
+							hasZhucunTable: result.result.hasZhucunTable || false
+						};
+					} else {
+						return {
+							success: false,
+							error: result.result.msg || '检查失败'
+						};
+					}
+				} catch (e) {
+					console.error('检查A类评分表失败:', e);
+					return {
+						success: false,
+						error: e.message
+					};
+				}
+			},
+			
 			// 确认导出
 			async confirmExport() {
 				if (!this.exportData.year) {
@@ -248,10 +288,46 @@
 				}
 				
 				uni.showLoading({
+					title: '正在检查数据...'
+				});
+				
+				// 先检查是否有A类评分表
+				const checkResult = await this.checkATypeRatings();
+				if (checkResult.success) {
+					if (!checkResult.hasATypeRatings) {
+						uni.hideLoading();
+						
+						let message = `未找到${this.exportData.year}年度的A类评分表，`;
+						if (!checkResult.hasBanziTable && !checkResult.hasZhucunTable) {
+							message += '请先创建班子评分表和驻村工作评分表';
+						} else if (!checkResult.hasBanziTable) {
+							message += '请先创建班子评分表';
+						} else if (!checkResult.hasZhucunTable) {
+							message += '请先创建驻村工作评分表';
+						}
+						
+						uni.showModal({
+							title: '提示',
+							content: message,
+							showCancel: false
+						});
+						return;
+					}
+				} else {
+					// 检查失败，但仍然尝试导出
+					console.warn('检查A类评分表失败，仍然尝试导出');
+				}
+				
+				uni.showLoading({
 					title: '正在导出...'
 				});
 				
 				try {
+					console.log('开始导出A类评分汇总表，参数:', {
+						group_id: this.exportData.group_id,
+						year: this.exportData.year
+					});
+					
 					// 调用云函数导出A类评分汇总
 					const result = await uniCloud.callFunction({
 						name: 'ratingTable',
@@ -310,9 +386,12 @@
 						
 						this.hideExportPopup();
 					} else {
-						uni.showToast({
-							title: result.result.msg || '导出失败',
-							icon: 'none'
+						// 显示更详细的错误信息
+						console.error('导出失败:', result.result);
+						uni.showModal({
+							title: '导出失败',
+							content: result.result.msg || '导出A类评分汇总表失败，请检查是否有符合条件的评分表',
+							showCancel: false
 						});
 					}
 				} catch (e) {
@@ -407,9 +486,14 @@
 	}
 
 	.group-desc {
-		font-size: 24rpx;
-		color: rgba(255, 255, 255, 0.8);
-		margin-top: 5rpx;
+		font-size: 26rpx;
+		color: rgba(255, 255, 255, 0.9);
+		margin-top: 10rpx;
+		font-weight: bold;
+		background-color: rgba(255, 255, 255, 0.15);
+		padding: 8rpx 15rpx;
+		border-radius: 6rpx;
+		display: inline-block;
 	}
 	
 	.year-actions {

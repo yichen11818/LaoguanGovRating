@@ -605,7 +605,6 @@
 			loadTables() {
 				this.isLoading = true;
 				console.log('开始加载评分表，当前评分人列表数量:', this.raters.length);
-				
 				const type = this.typeOptions[this.currentTypeIndex].id;
 				
 				uniCloud.callFunction({
@@ -656,6 +655,7 @@
 							icon: 'none'
 						});
 					}
+					console.log('评分表', this.tables);
 				}).catch(err => {
 					this.isLoading = false;
 					console.error(err);
