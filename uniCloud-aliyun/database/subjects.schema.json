@@ -27,8 +27,8 @@
     },
     "position": {
       "bsonType": "string",
-      "description": "职位",
-      "title": "职位"
+      "description": "类别 1,A类 2,B类",
+      "title": "类别"
     },
     "department": {
       "bsonType": "string",

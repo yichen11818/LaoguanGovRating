@@ -18,6 +18,8 @@ exports.main = async (event, context) => {
       return await getSubjects(data);
     case 'getSubjectDetail':
       return await getSubjectDetail(data);
+    case 'getSubjectsByIds':
+      return await getSubjectsByIds(data);
     default:
       return {
         code: -1,
@@ -245,6 +247,41 @@ async function getSubjectDetail(data) {
     return {
       code: -1,
       msg: '获取考核对象详情失败',
+      error: e.message
+    };
+  }
+}
+
+// 通过ID列表批量获取考核对象
+async function getSubjectsByIds(data) {
+  const { ids } = data;
+  
+  // 参数校验
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return {
+      code: -1,
+      msg: '未提供有效的ID列表'
+    };
+  }
+
+  try {
+    // 批量查询指定ID的考核对象
+    const subjectList = await subjectCollection.where({
+      _id: db.command.in(ids)
+    }).get();
+    
+    console.log(`根据ID查询结果: 找到 ${subjectList.data.length}/${ids.length} 条记录`);
+    
+    return {
+      code: 0,
+      msg: '批量获取考核对象成功',
+      data: subjectList.data
+    };
+  } catch (e) {
+    console.error('批量获取考核对象失败:', e);
+    return {
+      code: -1,
+      msg: '批量获取考核对象失败: ' + e.message,
       error: e.message
     };
   }

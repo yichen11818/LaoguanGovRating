@@ -1,0 +1,10 @@
+{
+    "unicloud-cli.spaceAssociations": {
+        "aliyun": {
+            "spaceId": "1",
+            "spaceName": "laoguan",
+            "provider": "aliyun",
+            "projectName": "laoguan"
+        }
+    }
+}

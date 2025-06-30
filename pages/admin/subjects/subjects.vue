@@ -28,7 +28,7 @@
 						<text class="subject-department" v-if="subject.department">{{subject.department}}</text>
 					</view>
 					<view class="info-row" v-if="subject.position">
-						<text class="subject-position">职位：{{subject.position}}</text>
+						<text class="subject-position">类别：{{subject.position}}</text>
 					</view>
 					<view class="info-row">
 						<text class="subject-table">所属评分表：{{getTableNames(subject.table_id)}}</text>
@@ -63,8 +63,23 @@
 				<input v-model="formData.department" class="form-input" placeholder="请输入部门" />
 			</view>
 			<view class="form-item">
-				<text class="form-label">职位</text>
-				<input v-model="formData.position" class="form-input" placeholder="请输入职位" />
+				<text class="form-label">类别</text>
+				<view class="category-selector">
+					<radio-group @change="handleCategoryChange">
+						<label class="radio-label">
+							<radio value="" :checked="formData.position === ''" />
+							<text>无</text>
+						</label>
+						<label class="radio-label">
+							<radio value="A类" :checked="formData.position === 'A类'" />
+							<text>A类</text>
+						</label>
+						<label class="radio-label">
+							<radio value="B类" :checked="formData.position === 'B类'" />
+							<text>B类</text>
+						</label>
+					</radio-group>
+				</view>
 			</view>
 			<view class="popup-btns">
 				<button class="cancel-btn" size="mini" @click="hideAddSubjectPopup">取消</button>
@@ -85,8 +100,23 @@
 				<input v-model="editData.department" class="form-input" placeholder="请输入部门" />
 			</view>
 			<view class="form-item">
-				<text class="form-label">职位</text>
-				<input v-model="editData.position" class="form-input" placeholder="请输入职位" />
+				<text class="form-label">类别</text>
+				<view class="category-selector">
+					<radio-group @change="handleEditCategoryChange">
+						<label class="radio-label">
+							<radio value="" :checked="editData.position === ''" />
+							<text>无</text>
+						</label>
+						<label class="radio-label">
+							<radio value="A类" :checked="editData.position === 'A类'" />
+							<text>A类</text>
+						</label>
+						<label class="radio-label">
+							<radio value="B类" :checked="editData.position === 'B类'" />
+							<text>B类</text>
+						</label>
+					</radio-group>
+				</view>
 			</view>
 			<view class="form-item">
 				<text class="form-label">所属评分表</text>
@@ -520,6 +550,16 @@
 						icon: 'none'
 					});
 				});
+			},
+			
+			// 处理类别选择变化
+			handleCategoryChange(e) {
+				this.formData.position = e.detail.value;
+			},
+			
+			// 处理编辑类别变化
+			handleEditCategoryChange(e) {
+				this.editData.position = e.detail.value;
 			}
 		}
 	}
@@ -626,6 +666,7 @@
 	.subject-position {
 		font-size: 28rpx;
 		color: #666;
+		flex-direction: row;
 	}
 	
 	.subject-table {
@@ -764,5 +805,29 @@
 	.load-btn {
 		background-color: #f5f5f5;
 		color: #333;
+	}
+	
+	.category-selector {
+		margin-top: 10rpx;
+		display: flex;
+	}
+	
+	.category-selector radio-group {
+		display: flex;
+		flex-direction: row;
+		width: 100%;
+		align-items: center;
+	}
+	
+	.radio-label {
+		margin-right: 30rpx;
+		display: inline-flex;
+		align-items: center;
+		padding: 8rpx 0;
+	}
+	
+	.radio-label text {
+		margin-left: 5rpx;
+		font-size: 28rpx;
 	}
 </style> 

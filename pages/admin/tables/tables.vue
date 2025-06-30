@@ -442,12 +442,14 @@
 				
 				// 新增数据
 				allSubjects: [], // 所有考核对象
+				selectedSubjectsMap: {}, // 存储所有已选考核对象的完整信息，使用ID作为键
 				// 考核对象分页数据
 				subjectPage: 1,
 				subjectPageSize: 20,
 				subjectTotal: 0,
 				hasMoreSubjects: false,
 				isLoadingSubjects: false,
+				
 				selectedSubjectIds: [], // 临时存储选中的考核对象ID
 				subjectSearchKey: '', // 考核对象搜索关键词
 				subjectSearching: false, // 是否在搜索中
@@ -515,13 +517,20 @@
 			this.debugMethods();
 		},
 		onShow() {
+			// 如果已经有数据且有年份筛选，不需要重新加载全部数据
+			if (this.tables.length > 0 && this.yearFilter) {
+				console.log('保持当前年份筛选:', this.yearFilter);
+				return;
+			}
+			
 			// 初始加载数据
 			this.tables = [];
 			this.currentPage = 1;
 			this.hasMoreData = true;
-			this.loadData();
+			
+			// 调用loadTables而不是loadData，确保使用正确的年份参数
+			this.loadTables();
 			this.loadRaters();
-			// this.loadSubjects(); // 删除这一行调用，因为它在onLoad中已经被调用，或者没有实现
 		},
 		computed: {
 			// 过滤后的考核对象列表
@@ -571,10 +580,18 @@
 				return categoryIndex === 0 ? this.typeOptionsA : this.typeOptionsB;
 			},
 			
-			// 处理表单分类变化
+			// 修改处理表单分类变化的函数
 			handleFormCategoryChange(e) {
-				this.formData.categoryIndex = e.detail.value;
+				console.log('切换分类:', e.detail.value, '从', this.formData.categoryIndex, '到', e.detail.value);
+				this.formData.categoryIndex = Number(e.detail.value);
 				this.formData.typeIndex = 0; // 重置类型索引
+				
+				// 强制更新类型选项
+				this.$nextTick(() => {
+					// 获取新分类下的类型选项
+					const newTypeOptions = this.getTypeOptionsByCategory(this.formData.categoryIndex);
+					console.log('新的类型选项:', newTypeOptions);
+				});
 			},
 			
 			// 处理表单类型变化
@@ -582,10 +599,12 @@
 				this.formData.typeIndex = e.detail.value;
 			},
 			
-			// 处理编辑分类变化
+			// 编辑分类变化同样处理
 			handleEditCategoryChange(e) {
-				this.editData.categoryIndex = e.detail.value;
+				console.log('编辑切换分类:', e.detail.value);
+				this.editData.categoryIndex = Number(e.detail.value);
 				this.editData.typeIndex = 0; // 重置类型索引
+				this.$forceUpdate(); // 强制更新视图
 			},
 			
 			// 处理编辑类型变化
@@ -624,7 +643,7 @@
 					
 					if (res.result.code === 0) {
 						const data = res.result.data;
-						
+						console.log('评分表数据:', data);
 						if (this.page === 1) {
 							this.tables = data.list;
 						} else {
@@ -670,7 +689,6 @@
 			loadData() {
 				if (this.isLoading) return;
 				this.isLoading = true;
-				console.log('开始加载评分表，当前评分人列表数量:', this.raters.length);
 				
 				const typeValue = this.typeOptions[this.currentTypeIndex].id;
 				
@@ -682,7 +700,8 @@
 							type: typeValue,
 							page: this.currentPage,
 							pageSize: 10,
-							keyword: this.searchKeyword
+							keyword: this.searchKeyword,
+							year: this.yearFilter || '' // 确保传递年份参数
 						}
 					}
 				}).then(res => {
@@ -857,7 +876,7 @@
 					title: '提交中...'
 				});
 				
-				// 获取正确的类型ID
+				// 获取正确的类型ID（修改这部分）
 				const typeOptions = this.getTypeOptionsByCategory(this.formData.categoryIndex);
 				const type = typeOptions[this.formData.typeIndex].id;
 				
@@ -867,7 +886,7 @@
 						action: 'createTable',
 						data: {
 							name: this.formData.name,
-							type: type,
+							type: type, // 确保使用正确类型ID
 							category: this.formData.category,
 							timeCategory: this.formData.timeCategory, // 添加时间分类
 							rater: this.formData.rater,
@@ -988,7 +1007,7 @@
 					title: '提交中...'
 				});
 				
-				// 获取正确的类型ID
+				// 获取正确的类型ID（修改这部分）
 				const typeOptions = this.getTypeOptionsByCategory(this.editData.categoryIndex);
 				const type = typeOptions[this.editData.typeIndex].id;
 				
@@ -1000,7 +1019,7 @@
 							tableId: this.editData._id,
 							updateData: {
 								name: this.editData.name,
-								type: type,
+								type: type, // 确保使用正确类型ID
 								category: this.editData.category,
 								timeCategory: this.editData.timeCategory, // 添加时间分类
 								selectedSubjects: this.editData.selectedSubjects,
@@ -1384,6 +1403,12 @@
 				console.log('打开选择器 - 当前已选对象IDs:', this.selectedSubjectIds);
 				console.log('打开选择器 - 当前formData中的选中对象:', JSON.stringify(this.formData.selectedSubjects));
 				
+				// 初始化或更新selectedSubjectsMap
+				this.selectedSubjectsMap = {};
+				this.formData.selectedSubjects.forEach(subject => {
+					this.selectedSubjectsMap[subject._id] = subject;
+				});
+				
 				this.subjectSearchKey = ''; // 清空搜索关键词
 				// 重置考核对象分页数据
 				this.subjectPage = 1;
@@ -1417,6 +1442,12 @@
 				this.selectedSubjectIds = this.editData.selectedSubjects.map(s => s._id);
 				console.log('打开编辑选择器 - 当前已选对象IDs:', this.selectedSubjectIds);
 				console.log('打开编辑选择器 - 当前editData中的选中对象:', JSON.stringify(this.editData.selectedSubjects));
+				
+				// 初始化或更新selectedSubjectsMap
+				this.selectedSubjectsMap = {};
+				this.editData.selectedSubjects.forEach(subject => {
+					this.selectedSubjectsMap[subject._id] = subject;
+				});
 				
 				this.subjectSearchKey = ''; // 清空搜索关键词
 				// 重置考核对象分页数据
@@ -1534,9 +1565,11 @@
 				const index = this.selectedSubjectIds.indexOf(subject._id);
 				if (index > -1) {
 					this.selectedSubjectIds.splice(index, 1);
+					delete this.selectedSubjectsMap[subject._id];
 					console.log('取消选择考核对象:', subject.name, '，ID:', subject._id);
 				} else {
 					this.selectedSubjectIds.push(subject._id);
+					this.selectedSubjectsMap[subject._id] = subject;
 					console.log('选择考核对象:', subject.name, '，ID:', subject._id);
 				}
 				console.log('当前选中的考核对象IDs:', this.selectedSubjectIds);
@@ -1550,21 +1583,11 @@
 				console.log('确认选择前 - 选中的考核对象IDs:', this.selectedSubjectIds);
 				console.log('确认选择前 - 当前加载的全部考核对象数量:', this.allSubjects.length);
 				
-				// 根据选中的ID获取完整的考核对象信息
-				const selectedSubjects = this.allSubjects.filter(subject => 
-					this.selectedSubjectIds.includes(subject._id)
-				);
+				// 根据selectedSubjectsMap中存储的完整信息构建已选对象数组
+				const selectedSubjects = Object.values(this.selectedSubjectsMap);
 				
-				console.log('根据ID筛选后得到的考核对象数量:', selectedSubjects.length);
-				console.log('筛选后的考核对象列表:', JSON.stringify(selectedSubjects));
-				
-				// 检查是否有ID在allSubjects中找不到
-				const missingIds = this.selectedSubjectIds.filter(id => 
-					!this.allSubjects.some(subject => subject._id === id)
-				);
-				if (missingIds.length > 0) {
-					console.error('警告：有些选中的ID在allSubjects中找不到:', missingIds);
-				}
+				console.log('从完整信息Map中获取的考核对象数量:', selectedSubjects.length);
+				console.log('从Map中获取的考核对象列表:', JSON.stringify(selectedSubjects));
 				
 				// 判断是在新增还是编辑模式
 				if (this.editingTableId) {
@@ -1706,6 +1729,7 @@
 				this.filteredSubjects.forEach(subject => {
 					if (!this.selectedSubjectIds.includes(subject._id)) {
 						this.selectedSubjectIds.push(subject._id);
+						this.selectedSubjectsMap[subject._id] = subject;
 					}
 				});
 				
@@ -1718,6 +1742,7 @@
 			// 清除所有已选考核对象
 			clearSelectedSubjects() {
 				this.selectedSubjectIds = [];
+				this.selectedSubjectsMap = {};
 				
 				uni.showToast({
 					title: '已清除所有选择',
@@ -1727,6 +1752,12 @@
 			
 			// 根据ID获取考核对象名称
 			getSubjectNameById(id) {
+				// 优先从已选Map中获取，确保能够获取到已选但不在当前搜索结果中的对象
+				if (this.selectedSubjectsMap[id]) {
+					return this.selectedSubjectsMap[id].name;
+				}
+				
+				// 如果Map中没有，则从当前搜索结果中查找
 				const subject = this.allSubjects.find(s => s._id === id);
 				return subject ? subject.name : '';
 			},
@@ -1876,7 +1907,7 @@ page {
 	font-size: 28rpx;
 	color: var(--text-main);
 	position: relative;
-	padding: 12rpx 20rpx;
+	padding: 16rpx 30rpx; /* 扩大选择器点击区域 */
 	background-color: var(--primary-light);
 	border-radius: var(--btn-radius);
 	transition: all var(--transition-time);
@@ -1946,16 +1977,15 @@ page {
 	background-color: var(--bg-light);
 	border-radius: var(--card-radius);
 	margin-bottom: 24rpx;
-	padding: 24rpx;
+	padding: 30rpx 25rpx; /* 扩大点击区域 */
 	border: 1rpx solid var(--border-light);
 	box-shadow: var(--shadow-sm);
 	transition: all var(--transition-time);
 }
 
 .table-item:active {
-	transform: translateY(2rpx);
-	box-shadow: var(--shadow-lg);
-	border-color: var(--primary-light);
+	transform: scale(0.98); /* 提供更明显的触摸反馈 */
+	transition: transform 0.1s; /* 加快反馈速度 */
 }
 
 /* 表头样式 */
@@ -2029,14 +2059,16 @@ page {
 	right: 0;
 	top: 0;
 	display: flex;
+	flex-direction: row; /* 确保按钮水平排列 */
 	z-index: 2;
 }
 
 .action-btn {
-	width: 60rpx;
-	height: 60rpx;
+	width: 80rpx; /* 从60rpx增加 */
+	height: 80rpx; /* 从60rpx增加 */
 	background-color: var(--bg-light);
 	margin-left: 16rpx;
+	margin-right: 16rpx; /* 添加右侧间距 */
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -2058,8 +2090,8 @@ page {
 }
 
 .action-btn:active {
-	transform: scale(0.9);
-	box-shadow: none;
+	transform: scale(0.98); /* 提供更明显的触摸反馈 */
+	transition: transform 0.1s; /* 加快反馈速度 */
 }
 
 .action-icon {
@@ -2118,15 +2150,21 @@ page {
 
 /* 弹窗样式 */
 .popup-content {
+	width: 92vw; /* 改为视窗宽度的百分比 */
+	max-width: 650rpx; /* 设置最大宽度 */
+	margin: 0 auto; /* 确保水平居中 */
+	left: 0;
+	right: 0;
 	background-color: var(--bg-light);
 	border-radius: 16rpx;
 	padding: 40rpx 30rpx;
-	width: 600rpx;
+	width: 800rpx;
 	max-width: 90%;
 	box-sizing: border-box;
 	box-shadow: var(--shadow-lg);
-	max-height: 85vh; /* 最大高度为视口高度的85% */
+	max-height: 80vh; /* 减小最大高度 */
 	overflow-y: auto; /* 内容过多时可滚动 */
+	padding: 40rpx 40rpx 120rpx; /* 增加底部内边距防止内容被按钮遮挡 */
 }
 
 .popup-title {
@@ -2166,8 +2204,8 @@ page {
 .form-input,
 .form-picker,
 .current-rater {
-	min-height: 80rpx;
-	height: auto;
+	min-height: 90rpx; /* 增大高度更容易点击 */
+	margin-bottom: 10rpx; /* 增加间距 */
 	border: 1rpx solid var(--border-color);
 	border-radius: 8rpx;
 	padding: 12rpx 24rpx;
@@ -2397,16 +2435,16 @@ page {
 .subject-list-container {
 	flex: 1;
 	overflow-y: auto;
-	max-height: 45vh; /* 减小最大高度，确保不超出屏幕 */
+	max-height: 50vh; /* 增加列表可视区域 */
 	min-height: 250rpx; /* 设置最小高度 */
 	padding: 0 20rpx;
-	padding-bottom: 120rpx; /* 增加底部内边距，确保内容不被按钮遮挡 */
+	padding-bottom: 150rpx; /* 确保底部内容可见 */
 	margin-bottom: 20rpx; /* 增加底部外边距 */
 	-webkit-overflow-scrolling: touch; /* 增强iOS滚动体验 */
 }
 
 .subject-item {
-	padding: 24rpx 20rpx; /* 增加内边距，使触摸区域更大 */
+	padding: 30rpx 25rpx; /* 扩大点击区域 */
 	margin-bottom: 8rpx; /* 增加项目间距 */
 	background-color: #ffffff; /* 确保背景色 */
 	border-radius: 8rpx; /* 添加圆角 */
@@ -2524,7 +2562,8 @@ page {
 
 /* 输入框增强样式 */
 .form-input {
-	min-height: 80rpx; /* 设置最小高度 */
+	min-height: 90rpx; /* 增大高度更容易点击 */
+	margin-bottom: 10rpx; /* 增加间距 */
 	height: auto; /* 高度自适应 */
 	padding: 12rpx 24rpx; /* 增加内边距 */
 	line-height: 1.5; /* 增加行高 */
@@ -2681,5 +2720,20 @@ page {
 .form-input[readonly] {
 	background-color: #F5F7FA;
 	color: var(--text-regular);
+}
+
+.form-label {
+	margin-bottom: 16rpx; /* 增加标签与输入框的间距 */
+}
+
+.confirm-btn:active, .cancel-btn:active {
+	opacity: 0.7; /* 更明显的按钮点击效果 */
+}
+
+/* 如果弹窗使用了定位 */
+.uni-popup .uni-popup__wrapper {
+	display: flex;
+	justify-content: center;
+	align-items: center;
 }
 </style> 
