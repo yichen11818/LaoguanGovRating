@@ -112,7 +112,7 @@
 		
 		<!-- 版本信息 -->
 		<view class="version-info">
-			<text>v1.0.0</text>
+			<text>v2.2.1</text>
 		</view>
 	</view>
 </template>

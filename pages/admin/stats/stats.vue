@@ -105,6 +105,39 @@
 		<view class="load-more" v-if="subjects.length > 0 && hasMoreData">
 			<button class="load-btn" size="mini" @click="loadMore" :loading="isLoading">加载更多</button>
 		</view>
+		
+		<!-- 未完成评分人员统计 -->
+		<view class="incomplete-stats">
+			<view class="section-title">未完成评分人员</view>
+			
+			<view class="filter-bar" v-if="currentTableIndex === 0">
+				<button class="refresh-btn" size="mini" @click="loadIncompleteRaters" :loading="loadingIncomplete">
+					<text class="refresh-icon">⟳</text> 刷新
+				</button>
+			</view>
+			
+			<view class="no-data" v-if="incompleteRaters.length === 0 && !loadingIncomplete">
+				<text class="no-data-text">暂无未完成评分的人员数据</text>
+			</view>
+			
+			<view class="rater-list" v-else>
+				<view class="rater-card" v-for="(rater, index) in incompleteRaters" :key="index">
+					<view class="rater-header">
+						<text class="rater-name">{{rater.name || rater.username}}</text>
+						<text class="rater-status">未完成: {{rater.pending || 0}}/{{rater.total || 0}}</text>
+					</view>
+					<view class="progress-bar">
+						<progress :percent="rater.completionRate || 0" stroke-width="4" />
+						<text class="progress-text">{{rater.completionRate || 0}}%</text>
+					</view>
+					<view class="rater-tables" v-if="rater.tables && rater.tables.length > 0">
+						<view class="table-tag" v-for="(table, tIndex) in rater.tables" :key="tIndex">
+							{{table.name}}
+						</view>
+					</view>
+				</view>
+			</view>
+		</view>
 	</view>
 </template>
 
@@ -126,12 +159,15 @@
 				pageSize: 10,
 				total: 0,
 				hasMoreData: false,
-				isLoading: false
+				isLoading: false,
+				incompleteRaters: [],
+				loadingIncomplete: false
 			}
 		},
 		onLoad() {
 			this.loadTables();
 			this.loadOverview();
+			this.loadIncompleteRaters();
 		},
 		methods: {
 			// 获取评分表类型名称
@@ -206,6 +242,9 @@
 				if (this.currentTableIndex > 0) {
 					this.loadTableStats();
 					this.loadSubjectStats();
+					this.loadIncompleteRaters(this.tables[this.currentTableIndex]._id);
+				} else {
+					this.loadIncompleteRaters();
 				}
 			},
 			
@@ -280,6 +319,40 @@
 				
 				this.page++;
 				this.loadSubjectStats();
+			},
+			
+			// 加载未完成评分的评分员列表
+			loadIncompleteRaters(tableId = null) {
+				this.loadingIncomplete = true;
+				this.incompleteRaters = [];
+				
+				uniCloud.callFunction({
+					name: 'rating',
+					data: {
+						action: 'getIncompleteRaters',
+						data: {
+							table_id: tableId
+						}
+					}
+				}).then(res => {
+					this.loadingIncomplete = false;
+					
+					if (res.result.code === 0) {
+						this.incompleteRaters = res.result.data || [];
+					} else {
+						uni.showToast({
+							title: res.result.msg || '加载未完成评分人员数据失败',
+							icon: 'none'
+						});
+					}
+				}).catch(err => {
+					this.loadingIncomplete = false;
+					console.error(err);
+					uni.showToast({
+						title: '加载未完成评分人员数据失败，请检查网络',
+						icon: 'none'
+					});
+				});
 			}
 		}
 	}
@@ -574,5 +647,71 @@
 		font-size: 28rpx;
 		color: #666;
 		background-color: #f8f8f8;
+	}
+	
+	/* 未完成评分人员样式 */
+	.incomplete-stats {
+		margin-top: 40rpx;
+	}
+	
+	.refresh-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 26rpx;
+		color: #666;
+		background-color: #f8f8f8;
+		padding: 0 20rpx;
+	}
+	
+	.refresh-icon {
+		margin-right: 8rpx;
+		font-size: 24rpx;
+	}
+	
+	.rater-list {
+		margin-top: 20rpx;
+	}
+	
+	.rater-card {
+		background-color: #fff;
+		border-radius: 16rpx;
+		padding: 30rpx;
+		margin-bottom: 20rpx;
+		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05);
+	}
+	
+	.rater-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 16rpx;
+	}
+	
+	.rater-name {
+		font-size: 30rpx;
+		font-weight: bold;
+	}
+	
+	.rater-status {
+		font-size: 28rpx;
+		color: #ff6666;
+		font-weight: bold;
+	}
+	
+	.rater-tables {
+		display: flex;
+		flex-wrap: wrap;
+		margin-top: 16rpx;
+	}
+	
+	.table-tag {
+		font-size: 24rpx;
+		color: #666;
+		background-color: #f5f5f5;
+		padding: 6rpx 16rpx;
+		border-radius: 6rpx;
+		margin-right: 10rpx;
+		margin-bottom: 10rpx;
 	}
 </style> 

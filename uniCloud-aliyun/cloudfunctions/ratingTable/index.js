@@ -1257,75 +1257,30 @@ async function checkATypeRatings(data) {
   try {
     console.log('检查A类评分表，参数:', { group_id, year });
     
-    // 查询所有类型为1的表格
-    const allTypeOneTablesResult = await ratingTableCollection.where({
-      type: 1, // A类评分表
+    // 查询班子评分表(type=1)
+    const banziTablesResult = await ratingTableCollection.where({
+      type: 1, // A类班子评分
       group_id
     }).get();
     
-    console.log(`找到${allTypeOneTablesResult.data.length}个类型为1的表格`);
+    // 查询驻村工作评分表(type=2)
+    const zhucunTablesResult = await ratingTableCollection.where({
+      type: 2, // A类驻村工作评分
+      group_id
+    }).get();
     
-    // 检查是否有班子评分表
-    let hasBanziTable = false;
-    // 检查是否有驻村评分表
-    let hasZhucunTable = false;
+    const hasBanziTable = banziTablesResult.data.length > 0;
+    const hasZhucunTable = zhucunTablesResult.data.length > 0;
     
-         // 遍历所有表格，检查类别或名称
-     for (const table of allTypeOneTablesResult.data) {
-       // 检查类别或名称中是否包含"班子"关键词
-       if ((table.category && table.category.includes('班子')) || 
-           (table.name && table.name.toLowerCase().includes('班子'))) {
-         hasBanziTable = true;
-         console.log('找到班子评分表:', table.name);
-       }
-       
-       // 检查类别或名称中是否包含"驻村"关键词
-       if ((table.category && table.category.includes('驻村')) || 
-           (table.name && table.name.toLowerCase().includes('驻村'))) {
-         hasZhucunTable = true;
-         console.log('找到驻村评分表:', table.name);
-       }
-     }
-     
-     // 如果找不到类型为1的表格，尝试查找其他类型的表格
-     if (!hasBanziTable || !hasZhucunTable) {
-       console.log('在类型1的表格中未找到足够的班子或驻村评分表，尝试查找其他类型的表格...');
-       
-       // 查询所有类型的表格
-       const allTablesResult = await ratingTableCollection.where({
-         group_id
-       }).get();
-       
-       console.log(`找到${allTablesResult.data.length}个所有类型的表格`);
-       
-       // 遍历所有表格，检查类别或名称
-       for (const table of allTablesResult.data) {
-         // 检查类别或名称中是否包含"班子"关键词
-         if (!hasBanziTable && ((table.category && table.category.includes('班子')) || 
-             (table.name && table.name.toLowerCase().includes('班子')))) {
-           hasBanziTable = true;
-           console.log('找到班子评分表(其他类型):', table.name, '类型:', table.type);
-         }
-         
-         // 检查类别或名称中是否包含"驻村"关键词
-         if (!hasZhucunTable && ((table.category && table.category.includes('驻村')) || 
-             (table.name && table.name.toLowerCase().includes('驻村')))) {
-           hasZhucunTable = true;
-           console.log('找到驻村评分表(其他类型):', table.name, '类型:', table.type);
-         }
-         
-         // 如果都找到了，可以提前退出循环
-         if (hasBanziTable && hasZhucunTable) {
-           break;
-         }
-       }
-     }
-    
-    console.log('检查结果:', { hasBanziTable, hasZhucunTable });
+    console.log('检查结果:', { 
+      hasBanziTable, 
+      hasZhucunTable,
+      banziCount: banziTablesResult.data.length,
+      zhucunCount: zhucunTablesResult.data.length 
+    });
     
     return {
       code: 0,
-      count: allTypeOneTablesResult.data.length,
       hasBanziTable,
       hasZhucunTable,
       hasATypeRatings: hasBanziTable && hasZhucunTable
@@ -1334,8 +1289,7 @@ async function checkATypeRatings(data) {
     console.error('检查A类评分表失败:', e);
     return {
       code: -1,
-      msg: '检查A类评分表失败: ' + e.message,
-      error: e.message
+      msg: '检查A类评分表失败: ' + e.message
     };
   }
 }

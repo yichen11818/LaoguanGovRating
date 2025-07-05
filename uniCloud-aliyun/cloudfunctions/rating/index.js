@@ -34,6 +34,8 @@ exports.main = async (event, context) => {
       return await getTableStats(data);
     case 'getSubjectStats':
       return await getSubjectStats(data);
+    case 'getIncompleteRaters':
+      return await getIncompleteRaters(data);
     default:
       return {
         code: -1,
@@ -426,8 +428,39 @@ async function getRatingStats(data) {
     }).count();
     const ratingCount = ratingResult.total || 0;
     
-    // 计算完成率 (只考虑有效的评分表的记录)
-    const completionRate = subjectCount > 0 ? Math.min(100, Math.round((ratingCount / subjectCount) * 100)) : 0;
+    // 计算每个表的考核对象数量和评分记录数量（优化为批量查询）
+    let totalSubjectCount = 0;
+    let completedRatingCount = 0;
+    
+    // 使用Promise.all同时查询所有表的数据，减少等待时间
+    const statsPromises = tables.data.map(async table => {
+      // 获取该表的考核对象数量
+      const tableSubjectsResult = await subjectCollection.where({
+        table_id: table._id
+      }).count();
+      
+      // 获取该表的评分记录数量
+      const tableRatingsResult = await ratingCollection.where({
+        table_id: table._id
+      }).count();
+      
+      return {
+        subjectCount: tableSubjectsResult.total || 0,
+        ratingCount: tableRatingsResult.total || 0
+      };
+    });
+    
+    // 等待所有查询完成
+    const tableStats = await Promise.all(statsPromises);
+    
+    // 统计总数
+    tableStats.forEach(stat => {
+      totalSubjectCount += stat.subjectCount;
+      completedRatingCount += stat.ratingCount;
+    });
+    
+    // 计算完成率：已完成的评分记录数量 / 总评分任务数量
+    const completionRate = totalSubjectCount > 0 ? Math.min(100, Math.round((completedRatingCount / totalSubjectCount) * 100)) : 0;
     
     // 构建总概览数据
     const overview = {
@@ -895,6 +928,142 @@ async function getSubjectStats(data) {
     return {
       code: -1,
       msg: '获取考核对象统计失败: ' + e.message,
+      error: e.message
+    };
+  }
+}
+
+// 获取未完成评分的人员列表
+async function getIncompleteRaters(data) {
+  const { table_id } = data;
+  
+  try {
+    // 获取所有评分员用户
+    const raters = await userCollection.where({
+      role: 'rater'
+    }).get();
+    
+    if (raters.data.length === 0) {
+      return {
+        code: 0,
+        msg: '没有找到评分员',
+        data: []
+      };
+    }
+    
+    // 获取评分表信息
+    let tables;
+    if (table_id && typeof table_id === 'string' && table_id.trim() !== '') {
+      // 使用where查询指定的表
+      tables = await ratingTableCollection.where({
+        _id: table_id
+      }).get();
+      
+      // 如果指定了表ID但没找到表
+      if (tables.data.length === 0) {
+        return {
+          code: -1,
+          msg: '评分表不存在'
+        };
+      }
+    } else {
+      // 获取所有评分表（当table_id为空、null、undefined或空字符串时）
+      tables = await ratingTableCollection.get();
+    }
+    
+    // 处理每个评分员的完成情况
+    const incompleteRaters = [];
+    
+    for (const rater of raters.data) {
+      // 如果没有分配评分表，跳过
+      if (!rater.assignedTables || rater.assignedTables.length === 0) {
+        continue;
+      }
+      
+      // 根据参数确定要检查的评分表
+      let tableIds = rater.assignedTables;
+      if (table_id && typeof table_id === 'string' && table_id.trim() !== '') {
+        // 如果指定了表ID且该评分员没有分配该表，跳过
+        if (!tableIds.includes(table_id)) {
+          continue;
+        }
+        tableIds = [table_id];
+      }
+      
+      // 获取这些评分表信息
+      const assignedTables = await ratingTableCollection.where({
+        _id: db.command.in(tableIds)
+      }).get();
+      
+      let totalSubjects = 0;
+      let completedCount = 0;
+      const incompleteTables = [];
+      
+      // 检查每个表的完成情况
+      for (const table of assignedTables.data) {
+        // 如果该表不是分配给这个评分员的，跳过
+        if (table.rater !== rater.username) {
+          continue;
+        }
+        
+        // 获取该表的考核对象数量
+        const subjects = await subjectCollection.where({
+          table_id: table._id
+        }).get();
+        
+        // 获取该表该评分员已完成的评分记录
+        const ratings = await ratingCollection.where({
+          table_id: table._id,
+          rater: rater.username
+        }).get();
+        
+        const subjectCount = subjects.data.length;
+        const ratingCount = ratings.data.length;
+        
+        totalSubjects += subjectCount;
+        completedCount += ratingCount;
+        
+        // 如果有未完成的评分，记录这个表
+        if (ratingCount < subjectCount) {
+          incompleteTables.push({
+            _id: table._id,
+            name: table.name,
+            total: subjectCount,
+            completed: ratingCount,
+            pending: subjectCount - ratingCount
+          });
+        }
+      }
+      
+      // 如果有未完成的评分，添加到未完成评分员列表
+      if (completedCount < totalSubjects) {
+        const completionRate = totalSubjects > 0 ? Math.round((completedCount / totalSubjects) * 100) : 0;
+        
+        incompleteRaters.push({
+          username: rater.username,
+          name: rater.name || rater.username,
+          total: totalSubjects,
+          completed: completedCount,
+          pending: totalSubjects - completedCount,
+          completionRate: completionRate,
+          tables: incompleteTables
+        });
+      }
+    }
+    
+    // 按照未完成数量降序排列
+    incompleteRaters.sort((a, b) => b.pending - a.pending);
+    
+    return {
+      code: 0,
+      msg: '获取未完成评分人员成功',
+      data: incompleteRaters
+    };
+  } catch (e) {
+    console.error('获取未完成评分人员失败:', e);
+    return {
+      code: -1,
+      msg: '获取未完成评分人员失败: ' + e.message,
       error: e.message
     };
   }

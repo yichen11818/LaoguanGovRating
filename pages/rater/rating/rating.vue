@@ -53,6 +53,14 @@
 				</view>
 			</view>
 			
+			<!-- 评分比例规则提示 -->
+			<view class="rating-rules-container">
+				<view class="rating-rules-title">评分比例要求（总人数：{{subjects.length}}人）</view>
+				<view class="rating-rules-content">
+					<text class="rating-rules-text">评分时，91-100分的占30%（{{calculateDistribution().high}}人），81-90分的占60%（{{calculateDistribution().middle}}人），80分以下的占10%（{{calculateDistribution().low}}人），请不要出现同分的情况。</text>
+				</view>
+			</view>
+			
 			<!-- 总分输入组件 -->
 			<view class="total-input-container">
 				<view class="total-input-header">
@@ -955,6 +963,39 @@
 				if (this.$refs.popup) {
 					this.$refs.popup.close();
 				}
+			},
+			// 计算评分分布人数
+			calculateDistribution() {
+				if (!this.subjects || !this.subjects.length) {
+					return { high: 0, middle: 0, low: 0 };
+				}
+				
+				const total = this.subjects.length;
+				// 计算各分数段人数
+				let high = Math.round(total * 0.3); // 91-100分占30%
+				let middle = Math.round(total * 0.6); // 81-90分占60%
+				let low = total - high - middle; // 80分以下占10%
+				
+				// 确保low至少为1人(如果总人数够的话)
+				if (low < 1 && total > 2) {
+					// 优先从middle减
+					if (middle > 1) {
+						middle -= 1;
+						low = 1;
+					} else if (high > 1) {
+						high -= 1;
+						low = 1;
+					}
+				}
+				
+				// 确保总和正确
+				const sum = high + middle + low;
+				if (sum !== total) {
+					// 如果总和不等于总人数，调整middle
+					middle += (total - sum);
+				}
+				
+				return { high, middle, low };
 			}
 		}
 	}
@@ -1161,6 +1202,33 @@
 		font-size: 26rpx;
 		color: #666;
 		line-height: 1.5;
+	}
+	
+	/* 评分比例规则提示 */
+	.rating-rules-container {
+		margin-bottom: 20rpx;
+		background-color: #fff8e6;
+		border-radius: 16rpx;
+		padding: 20rpx;
+		border: 2rpx solid #ffebba;
+		box-shadow: 0 2rpx 10rpx rgba(255, 193, 7, 0.1);
+	}
+	
+	.rating-rules-title {
+		font-size: 32rpx;
+		font-weight: bold;
+		color: #ff9800;
+		margin-bottom: 10rpx;
+	}
+	
+	.rating-rules-content {
+		font-size: 28rpx;
+		color: #333;
+		line-height: 1.6;
+	}
+	
+	.rating-rules-text {
+		font-weight: 500;
 	}
 	
 	/* 总分输入组件样式 */

@@ -1,7 +1,8 @@
 <template>
 	<view class="login-container">
 		<view class="header">
-			<text class="title">干部评分系统</text>
+			<image src="/static/images/logo.png" class="logo"></image>
+			<text class="title">老关镇绩效管理评分系统</text>
 			<text class="sub-title">{{
 				isLoginMode ? '账号登录' : 
 				isForgetMode ? '申请密码重置' : '用户注册'
@@ -388,6 +389,11 @@
 </script>
 
 <style>
+	.logo {
+		width: 100rpx;
+		height: 100rpx;
+		margin-bottom: 20rpx;
+	}
 	.login-container {
 		padding: 60rpx;
 		display: flex;

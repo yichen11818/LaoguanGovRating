@@ -60,7 +60,7 @@
 					<text class="form-label">选择年度</text>
 					<picker @change="handleYearChange" :value="exportData.yearIndex" :range="years" range-key="year">
 						<view class="picker-box">
-							<text class="picker-text">{{years[exportData.yearIndex]?.year || '请选择年度'}}</text>
+							<text class="picker-text">{{years[exportData.yearIndex]?.year || '请选择年度'}}{{years[exportData.yearIndex]?.description ? ' (' + years[exportData.yearIndex].description + ')' : ''}}</text>
 						</view>
 					</picker>
 				</view>
@@ -86,7 +86,8 @@
 				exportData: {
 					yearIndex: 0,
 					year: null,
-					group_id: null
+					group_id: null,
+					description: null
 				}
 			}
 		},
@@ -114,6 +115,7 @@
 							this.exportData.yearIndex = 0;
 							this.exportData.year = this.years[0].year;
 							this.exportData.group_id = this.years[0]._id;
+							this.exportData.description = this.years[0].description || '';
 						}
 					} else {
 						uni.showToast({
@@ -235,6 +237,7 @@
 				this.exportData.yearIndex = index;
 				this.exportData.year = this.years[index].year;
 				this.exportData.group_id = this.years[index]._id;
+				this.exportData.description = this.years[index].description || '';
 			},
 			
 			// 检查是否有A类评分表（通过云函数检查，避免权限问题）
@@ -325,7 +328,8 @@
 				try {
 					console.log('开始导出A类评分汇总表，参数:', {
 						group_id: this.exportData.group_id,
-						year: this.exportData.year
+						year: this.exportData.year,
+						description: this.exportData.description
 					});
 					
 					// 调用云函数导出A类评分汇总
@@ -335,7 +339,8 @@
 							action: 'exportATypeRatings',
 							data: {
 								group_id: this.exportData.group_id,
-								year: this.exportData.year
+								year: this.exportData.year,
+								description: this.exportData.description
 							}
 						}
 					});

@@ -48,10 +48,10 @@ async function exportATypeRatings(data) {
   const subjectCollection = db.collection('subjects');
   const ratingCollection = db.collection('ratings');
   
-  const { group_id, year } = data;
+  const { group_id, year, description } = data;
   
   try {
-    console.log(`开始导出${year}年度A类评分汇总表`);
+    console.log(`开始导出${year}年度${description ? '(' + description + ')' : ''}A类评分汇总表`);
     
     // 参数校验
     if (!group_id || !year) {
@@ -108,15 +108,13 @@ async function exportATypeRatings(data) {
     // 遍历所有表格，查找班子和驻村评分表
     for (const table of allTablesResult.data) {
       // 检查是否为班子评分表
-      if (!banziTable && ((table.category && table.category.includes('班子')) || 
-          (table.name && table.name.toLowerCase().includes('班子')))) {
+      if (!banziTable && table.type === 1) {
         banziTable = table;
         console.log('找到班子评分表:', table.name, '类型:', table.type);
       }
       
       // 检查是否为驻村评分表
-      if (!zhucunTable && ((table.category && table.category.includes('驻村')) || 
-          (table.name && table.name.toLowerCase().includes('驻村')))) {
+      if (!zhucunTable && table.type === 2) {
         zhucunTable = table;
         console.log('找到驻村评分表:', table.name, '类型:', table.type);
       }
@@ -249,7 +247,7 @@ async function exportATypeRatings(data) {
     const worksheetData = [];
     
     // 表头
-    const title = `老关镇${year}年度绩效考核评分汇总表（A类）`;
+    const title = `老关镇${year}年度${description ? '(' + description + ')' : ''}绩效考核评分汇总表（A类）`;
     worksheetData.push([title]);
     
     // 表头第二行
@@ -442,7 +440,7 @@ async function exportATypeRatings(data) {
       console.log('使用new关键字调用构造函数...');
       // 使用new关键字调用构造函数
       buffer = new BuildClass([{
-        name: `A类评分汇总表-${year}年`,
+        name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
         data: worksheetData
       }], options);
       console.log('Excel构建成功，buffer类型:', typeof buffer);
@@ -464,7 +462,7 @@ async function exportATypeRatings(data) {
             console.log('方法1: 使用new xlsxModule.build方式');
             const BuildXlsx = xlsxModule.build;
             buffer = new BuildXlsx([{
-              name: `A类评分汇总表-${year}年`,
+              name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
               data: worksheetData
             }], options);
             console.log('方法1成功');
@@ -480,7 +478,7 @@ async function exportATypeRatings(data) {
             console.log('方法2: 使用new xlsxModule.default.build方式');
             const BuildXlsx = xlsxModule.default.build;
             buffer = new BuildXlsx([{
-              name: `A类评分汇总表-${year}年`,
+              name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
               data: worksheetData
             }], options);
             console.log('方法2成功');
@@ -495,7 +493,7 @@ async function exportATypeRatings(data) {
           try {
             console.log('方法3: 尝试使用new xlsxModule()方式');
             buffer = new xlsxModule([{
-              name: `A类评分汇总表-${year}年`,
+              name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
               data: worksheetData
             }], options);
             console.log('方法3成功');
@@ -510,7 +508,7 @@ async function exportATypeRatings(data) {
           try {
             console.log('方法4: 尝试使用new xlsxModule.default()方式');
             buffer = new xlsxModule.default([{
-              name: `A类评分汇总表-${year}年`,
+              name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
               data: worksheetData
             }], options);
             console.log('方法4成功');
@@ -526,7 +524,7 @@ async function exportATypeRatings(data) {
             console.log('方法5: 尝试使用node-xlsx原始API');
             const nodeXlsx = require('node-xlsx');
             const worksheets = [{
-              name: `A类评分汇总表-${year}年`,
+              name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
               data: worksheetData,
               options: options
             }];
@@ -579,7 +577,7 @@ async function exportATypeRatings(data) {
     // 根据生成方法确定文件后缀
     const fileExtension = csvMode ? '.csv' : '.xlsx';
     const uploadResult = await uniCloud.uploadFile({
-      cloudPath: `exports/A类评分汇总表-${year}年-${Date.now()}${fileExtension}`,
+      cloudPath: `exports/A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}-${Date.now()}${fileExtension}`,
       fileContent: buffer
     });
     

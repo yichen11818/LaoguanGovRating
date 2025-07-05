@@ -712,10 +712,12 @@
 		top: 50%;
 		transform: translate(-50%, -50%);
 		width: 80%;
+		max-height: 80vh;
 		background-color: #fff;
 		border-radius: 12rpx;
 		padding: 30rpx;
 		z-index: 1000;
+		overflow-y: auto;
 	}
 	
 	.popup-title {
@@ -749,10 +751,14 @@
 		background-color: #f5f5f5;
 		border-radius: 8rpx;
 		padding: 20rpx;
+		max-height: 300rpx;
+		overflow-y: auto;
 	}
 	
 	.selected-tables {
 		margin-bottom: 20rpx;
+		max-height: 200rpx;
+		overflow-y: auto;
 	}
 	
 	.selected-table {

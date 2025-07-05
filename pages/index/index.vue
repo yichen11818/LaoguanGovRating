@@ -132,7 +132,7 @@
 					<text>系统公告</text>
 				</view>
 				<view class="notice-content">
-					<text class="notice-text">欢迎使用干部评分系统，您当前为普通用户，暂无评分权限。如需获取评分权限，请联系管理员。</text>
+					<text class="notice-text">欢迎使用老关镇绩效管理评分系统，您当前为普通用户，暂无评分权限。如需获取评分权限，请联系管理员。</text>
 				</view>
 			</view>
 		</view>
@@ -157,6 +157,22 @@
 					pendingCount: 0
 				},
 				tables: []
+			}
+		},
+		// 分享到微信聊天
+		onShareAppMessage() {
+			return {
+				title: '老关镇绩效管理评分系统',
+				path: '/pages/index/index',
+				imageUrl: '/static/images/share.png' // 分享缩略图
+			}
+		},
+		// 分享到朋友圈
+		onShareTimeline() {
+			return {
+				title: '老关镇绩效管理评分系统',
+				query: '',
+				imageUrl: '/static/images/share.png' // 分享缩略图
 			}
 		},
 		computed: {
@@ -349,17 +365,13 @@
 						data: {}
 					}
 				}).then(res => {
-					if (res.result.code === 0 && res.result.data.length > 0) {
-						let totalSubjects = 0;
-						let totalRated = 0;
-						
-						res.result.data.forEach(item => {
-							totalSubjects += item.totalSubjects;
-							totalRated += item.ratedCount;
-						});
-						
-						const rate = totalSubjects > 0 ? Math.round((totalRated / totalSubjects) * 100) : 0;
-						this.stats.ratingCompletionRate = `${rate}%`;
+					if (res.result.code === 0) {
+						// 直接使用后端返回的评分完成率数据
+						if (res.result.data && res.result.data.completionRate) {
+							this.stats.ratingCompletionRate = res.result.data.completionRate;
+						} else {
+							this.stats.ratingCompletionRate = '0%';
+						}
 					}
 				});
 			},
