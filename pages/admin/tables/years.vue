@@ -13,6 +13,9 @@
 			<!-- 导出A类评分功能 -->
 			<button class="export-btn" @click="exportATypeRatings">导出A类评分汇总表</button>
 			
+			<!-- 导出B类评分功能 -->
+			<button class="export-btn b-type" @click="exportBTypeRatings">导出B类评分汇总表</button>
+			
 		</view>
 		
 		<view class="year-list" v-if="years.length > 0">
@@ -57,7 +60,7 @@
 		<!-- 导出A类评分弹窗 -->
 		<uni-popup ref="exportPopup" type="center">
 			<view class="popup-content">
-				<view class="popup-title">导出A类评分汇总表</view>
+				<view class="popup-title">{{exportData.exportType === 'B' ? '导出B类评分汇总表' : '导出A类评分汇总表'}}</view>
 				
 				<!-- 导出表单 - 未开始导出时显示 -->
 				<view v-if="!exportTask.inProgress">
@@ -107,7 +110,8 @@
 					yearIndex: 0,
 					year: null,
 					group_id: null,
-					description: null
+					description: null,
+					exportType: 'A' // A或B类导出
 				},
 				// 导出任务状态
 				exportTask: {
@@ -251,8 +255,15 @@
 				}
 			},
 			
-			// 导出A类评分表相关方法
+			// 导出A类评分表
 			exportATypeRatings() {
+				this.exportData.exportType = 'A';
+				this.$refs.exportPopup.open();
+			},
+			
+			// 导出B类评分表
+			exportBTypeRatings() {
+				this.exportData.exportType = 'B';
 				this.$refs.exportPopup.open();
 			},
 			
@@ -338,104 +349,107 @@
 					return;
 				}
 				
-				console.log('开始导出操作，参数：', JSON.stringify(this.exportData));
+				console.log(`开始${this.exportData.exportType}类导出操作，参数：`, JSON.stringify(this.exportData));
 				
-				// 先检查是否有A类评分表
-				const checkResult = await this.checkATypeRatings();
-				console.log('检查A类评分表结果:', JSON.stringify(checkResult));
-				
-				if (checkResult.success) {
-					if (!checkResult.hasATypeRatings) {
-						uni.hideLoading();
-						
-						let message = `未找到${this.exportData.year}年度的A类评分表，`;
-						if (!checkResult.hasBanziTable && !checkResult.hasZhucunTable) {
-							message += '请先创建班子评分表和驻村工作评分表';
-						} else if (!checkResult.hasBanziTable) {
-							message += '请先创建班子评分表';
-						} else if (!checkResult.hasZhucunTable) {
-							message += '请先创建驻村工作评分表';
+				// 如果是A类导出，先检查是否有A类评分表
+				if (this.exportData.exportType === 'A') {
+					const checkResult = await this.checkATypeRatings();
+					console.log('检查A类评分表结果:', JSON.stringify(checkResult));
+					
+					if (checkResult.success) {
+						if (!checkResult.hasATypeRatings) {
+							uni.hideLoading();
+							
+							let message = `未找到${this.exportData.year}年度的A类评分表，`;
+							if (!checkResult.hasBanziTable && !checkResult.hasZhucunTable) {
+								message += '请先创建班子评分表和驻村工作评分表';
+							} else if (!checkResult.hasBanziTable) {
+								message += '请先创建班子评分表';
+							} else if (!checkResult.hasZhucunTable) {
+								message += '请先创建驻村工作评分表';
+							}
+							
+							uni.showModal({
+								title: '提示',
+								content: message,
+								showCancel: false
+							});
+							return;
 						}
-						
+					} else {
+						// 检查失败
 						uni.showModal({
-							title: '提示',
-							content: message,
+							title: '导出失败',
+							content: checkResult.error || '检查评分表失败',
 							showCancel: false
 						});
 						return;
 					}
+				}
+				
+				// 重置导出任务状态
+				this.exportTask = {
+					taskId: '',
+					polling: false,
+					inProgress: true,
+					progress: 0,
+					message: '正在创建导出任务...',
+					status: 'pending',
+					result: null
+				};
+				
+				try {
+					console.log(`开始增量导出${this.exportData.exportType}类评分汇总表，参数:`, JSON.stringify({
+						group_id: this.exportData.group_id,
+						year: this.exportData.year,
+						description: this.exportData.description || ''
+					}));
 					
-					// 重置导出任务状态
-					this.exportTask = {
-						taskId: '',
-						polling: false,
-						inProgress: true,
-						progress: 0,
-						message: '正在创建导出任务...',
-						status: 'pending',
-						result: null
-					};
-					
-					try {
-						console.log('开始增量导出A类评分汇总表，参数:', JSON.stringify({
-							group_id: this.exportData.group_id,
-							year: this.exportData.year,
-							description: this.exportData.description || ''
-						}));
-						
-						// 调用云函数创建导出任务
-						const result = await uniCloud.callFunction({
-							name: 'ratingTable',
+					// 调用云函数创建导出任务
+					const result = await uniCloud.callFunction({
+						name: 'ratingTable',
+						data: {
+							action: this.exportData.exportType === 'A' ? 'startExportATypeRatings' : 'startExportBTypeRatings',
 							data: {
-								action: 'startExportATypeRatings',
-								data: {
-									group_id: this.exportData.group_id,
-									year: this.exportData.year,
-									description: this.exportData.description || ''
-								}
+								group_id: this.exportData.group_id,
+								year: this.exportData.year,
+								description: this.exportData.description || ''
 							}
-						});
-						
-						console.log('创建导出任务返回结果:', JSON.stringify(result.result));
-						
-						if (result.result.code === 0) {
-							// 获取任务ID，开始轮询任务状态
-							this.exportTask.taskId = result.result.data.task_id;
-							this.exportTask.message = '导出任务已创建，正在处理...';
-							this.exportTask.polling = true;
-							
-							// 开始轮询任务状态
-							this.startPollingTaskStatus();
-						} else {
-							// 显示更详细的错误信息
-							console.error('创建导出任务失败:', JSON.stringify(result.result));
-							this.exportTask.inProgress = false;
-							this.exportTask.message = result.result.msg || '创建导出任务失败';
-							this.exportTask.status = 'failed';
-							
-							uni.showModal({
-								title: '导出失败',
-								content: result.result.msg || '创建导出任务失败',
-								showCancel: false
-							});
 						}
-					} catch (e) {
-						console.error('创建导出任务失败:', JSON.stringify(e));
+					});
+					
+					console.log('创建导出任务返回结果:', JSON.stringify(result.result));
+					
+					if (result.result.code === 0) {
+						// 获取任务ID，开始轮询任务状态
+						this.exportTask.taskId = result.result.data.task_id;
+						this.exportTask.message = '导出任务已创建，正在处理...';
+						this.exportTask.polling = true;
+						
+						// 开始轮询任务状态
+						this.startPollingTaskStatus();
+					} else {
+						// 显示更详细的错误信息
+						console.error('创建导出任务失败:', JSON.stringify(result.result));
 						this.exportTask.inProgress = false;
-						this.exportTask.message = '创建导出任务失败: ' + e.message;
+						this.exportTask.message = result.result.msg || '创建导出任务失败';
 						this.exportTask.status = 'failed';
 						
-						uni.showToast({
+						uni.showModal({
 							title: '导出失败',
-							icon: 'none'
+							content: result.result.msg || '创建导出任务失败',
+							showCancel: false
 						});
 					}
-				} else {
-					// 检查失败
-					uni.showModal({
+				} catch (e) {
+					console.error('创建导出任务失败:', JSON.stringify(e));
+					this.exportTask.inProgress = false;
+					this.exportTask.message = '创建导出任务失败: ' + e.message;
+					this.exportTask.status = 'failed';
+					
+					uni.showToast({
 						title: '导出失败',
-						content: checkResult.error || '检查评分表失败',
-						showCancel: false
+						icon: 'none'
 					});
 				}
 			},
@@ -707,15 +721,16 @@
 		border-radius: 30rpx;
 		display: flex;
 		align-items: center;
+		margin-bottom: 10rpx;
 	}
 	
 	.export-btn {
 		background-color: #0A8D2E;
 	}
 	
-	.view-ratings-btn {
+	.export-btn.b-type {
 		background-color: #FF9500;
-		margin-left: 20rpx;
+		margin-left: 10rpx;
 	}
 	
 	.action-section {

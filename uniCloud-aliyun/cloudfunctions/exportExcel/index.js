@@ -11,6 +11,8 @@ exports.main = async (event, context) => {
   switch (action) {
     case 'exportATypeRatings':
       return await exportATypeRatings(data);
+    case 'exportBTypeRatings':
+      return await exportBTypeRatings(data);
     default:
       return {
         code: -1,
@@ -625,6 +627,598 @@ async function exportATypeRatings(data) {
     return {
       code: -1,
       msg: '导出A类评分汇总表失败: ' + e.message,
+      error: e.message
+    };
+  }
+}
+
+// 导出B类评分汇总表
+async function exportBTypeRatings(data) {
+  const db = uniCloud.database();
+  const ratingTableCollection = db.collection('rating_tables');
+  const userCollection = db.collection('users');
+  const subjectCollection = db.collection('subjects');
+  const ratingCollection = db.collection('ratings');
+  
+  const { group_id, year, description, task_id, incremental } = data;
+  
+  // 更新任务进度的函数
+  const updateProgress = async (progress, message) => {
+    if (incremental && task_id) {
+      try {
+        console.log(`更新任务进度: ${progress}%, 消息: ${message}`);
+        await uniCloud.callFunction({
+          name: 'ratingTable',
+          data: {
+            action: 'updateExportTaskStatus',
+            data: {
+              task_id,
+              progress,
+              message
+            }
+          }
+        });
+      } catch (error) {
+        console.error('更新进度失败:', error);
+      }
+    }
+  };
+  
+  try {
+    console.log(`开始导出${year}年度${description ? '(' + description + ')' : ''}B类评分汇总表`);
+    console.log('导出参数:', JSON.stringify(data));
+    
+    if (incremental) {
+      console.log('使用增量模式导出，任务ID:', task_id);
+    }
+    
+    // 参数校验
+    if (!group_id || !year) {
+      return {
+        code: -1,
+        msg: '缺少必要参数'
+      };
+    }
+    
+    // 更新进度 - 10%：开始查询表格
+    if (incremental) await updateProgress(10, '正在查询评分表...');
+    
+    // 获取B类评分相关表格
+    console.log('开始查询B类评分相关表格，参数:', { group_id, year });
+    
+    // 查询指定group_id的表格
+    console.log('开始查询所有表格，group_id:', group_id);
+    const allTablesResult = await ratingTableCollection.where({
+      group_id
+    }).get();
+    
+    console.log(`找到${allTablesResult.data.length}个属于group_id ${group_id}的表格`);
+    console.log('表格详情:', JSON.stringify(allTablesResult.data.map(t => ({
+      _id: t._id, 
+      name: t.name, 
+      type: t.type,
+      status: t.status
+    }))));
+    
+    // 如果没有找到表格，返回错误信息
+    if (allTablesResult.data.length === 0) {
+      console.log('未找到任何表格');
+      return {
+        code: -1,
+        msg: `未找到任何评分表，请检查group_id ${group_id} 是否正确`
+      };
+    }
+    
+    // 收集所有相关表格的ID
+    const banziTableIds = []; // B类班子表 type=3
+    const aZhucunTableIds = []; // A类驻村表 type=2
+    const bZhucunTableIds = []; // B类驻村表 type=4
+    const officeDirectorTableIds = []; // 办主任评分表 type=5
+    
+    // 遍历所有表格，收集各类型的评分表ID
+    console.log('开始收集B类班子表(type=3)、A类驻村表(type=2)、B类驻村表(type=4)和办主任表(type=5)');
+    for (const table of allTablesResult.data) {
+      // B类班子表
+      if (table.type === 3) {
+        banziTableIds.push(table._id);
+      }
+      
+      // A类驻村表
+      if (table.type === 2) {
+        aZhucunTableIds.push(table._id);
+      }
+      
+      // B类驻村表
+      if (table.type === 4) {
+        bZhucunTableIds.push(table._id);
+      }
+      
+      // 办主任评分表
+      if (table.type === 5) {
+        officeDirectorTableIds.push(table._id);
+      }
+    }
+    
+    console.log(`收集到 ${banziTableIds.length} 个B类班子表、${aZhucunTableIds.length} 个A类驻村表、${bZhucunTableIds.length} 个B类驻村表和 ${officeDirectorTableIds.length} 个办主任表`);
+    console.log('B类班子表IDs:', JSON.stringify(banziTableIds));
+    console.log('A类驻村表IDs:', JSON.stringify(aZhucunTableIds));
+    console.log('B类驻村表IDs:', JSON.stringify(bZhucunTableIds));
+    console.log('办主任表IDs:', JSON.stringify(officeDirectorTableIds));
+    
+    // 检查是否找到了必要的表格
+    if (banziTableIds.length === 0) {
+      console.log('未找到B类班子评分表');
+      return {
+        code: -1,
+        msg: '未找到B类班子评分表，请检查是否有type=3的评分表'
+      };
+    }
+    
+    // 更新进度 - 20%：获取考核对象
+    if (incremental) await updateProgress(20, '正在获取考核对象...');
+    
+    // 获取B类班子表和办主任表的所有考核对象（不筛选position）
+    console.log('开始获取B类班子表和办主任表的考核对象（不筛选position）');
+    const banziSubjectsResult = await subjectCollection.where({
+      table_id: db.command.in([...banziTableIds, ...officeDirectorTableIds])
+    }).get();
+    
+    // 获取驻村表中的B类考核对象（筛选position="B类"）
+    console.log('开始获取驻村表中的B类考核对象（筛选position="B类"）');
+    const zhucunSubjectsResult = await subjectCollection.where({
+      table_id: db.command.in([...aZhucunTableIds, ...bZhucunTableIds]),
+      position: 'B类'
+    }).get();
+    
+    console.log(`找到${banziSubjectsResult.data.length}个班子表和办主任表考核对象`);
+    console.log(`找到${zhucunSubjectsResult.data.length}个驻村表中的B类考核对象`);
+    
+    // 合并考核对象，确保不重复
+    const subjectMap = new Map();
+    
+    // 添加班子和办主任表考核对象
+    for (const subject of banziSubjectsResult.data) {
+      subjectMap.set(subject._id, subject);
+    }
+    
+    // 添加驻村表B类考核对象
+    for (const subject of zhucunSubjectsResult.data) {
+      subjectMap.set(subject._id, subject);
+    }
+    
+    const subjects = Array.from(subjectMap.values());
+    
+    if (subjects.length === 0) {
+      console.log('未找到任何考核对象');
+      return {
+        code: -1,
+        msg: '未找到考核对象'
+      };
+    }
+    
+    console.log(`总共找到${subjects.length}个考核对象`);
+    console.log('考核对象详情:', JSON.stringify(subjects.map(subject => ({
+      _id: subject._id,
+      name: subject.name,
+      position: subject.position,
+      organization: subject.department || subject.organization
+    }))));
+    
+    // 更新进度 - 30%：获取评分记录
+    if (incremental) await updateProgress(30, '正在获取评分数据...');
+    
+    // 获取考核对象的ID列表和名称列表
+    const subjectIds = subjects.map(subject => subject._id);
+    const subjectNames = subjects.map(subject => subject.name);
+    
+    // 获取所有考核对象ID与名称的映射
+    const subjectIdToNameMap = {};
+    const subjectPositionMap = {};
+    for (const subject of subjects) {
+      subjectIdToNameMap[subject._id] = subject.name;
+      subjectPositionMap[subject._id] = subject.position || '';
+      subjectPositionMap[subject.name] = subject.position || '';
+    }
+    
+    // 获取B类班子评分记录（不筛选position）
+    console.log('获取B类班子评分记录');
+    const banziRatingsResult = await ratingCollection.where({
+      table_id: db.command.in(banziTableIds),
+      subject: db.command.in([...subjectIds, ...subjectNames])
+    }).get();
+    console.log(`找到${banziRatingsResult.data.length}条B类班子评分记录`);
+    
+    // 获取A类驻村表中对B类考核对象的评分记录（已通过subject筛选过）
+    console.log('获取A类驻村表中对B类考核对象的评分记录');
+    const aZhucunRatingsResult = await ratingCollection.where({
+      table_id: db.command.in(aZhucunTableIds),
+      subject: db.command.in([...subjectIds, ...subjectNames])
+    }).get();
+    console.log(`找到${aZhucunRatingsResult.data.length}条A类驻村表中对B类考核对象的评分记录`);
+    
+    // 获取B类驻村表中对B类考核对象的评分记录（已通过subject筛选过）
+    console.log('获取B类驻村表中对B类考核对象的评分记录');
+    const bZhucunRatingsResult = await ratingCollection.where({
+      table_id: db.command.in(bZhucunTableIds),
+      subject: db.command.in([...subjectIds, ...subjectNames])
+    }).get();
+    console.log(`找到${bZhucunRatingsResult.data.length}条B类驻村表中对B类考核对象的评分记录`);
+    
+    // 获取办主任评分记录（不筛选position）
+    console.log('获取办主任评分记录');
+    const officeDirectorRatingsResult = await ratingCollection.where({
+      table_id: db.command.in(officeDirectorTableIds),
+      subject: db.command.in([...subjectIds, ...subjectNames])
+    }).get();
+    console.log(`找到${officeDirectorRatingsResult.data.length}条办主任评分记录`);
+    
+    // 更新进度 - 40%：处理评分数据
+    if (incremental) await updateProgress(40, '正在处理评分数据...');
+    
+    // 构建评分数据，按照考核对象进行整合
+    const ratingData = {};
+    
+    // 收集所有评分人
+    const banziRaters = new Set(); // 收集所有班子评分人
+    const zhucunRaters = new Set(); // 收集所有驻村评分人
+    const officeDirectorRaters = new Set(); // 收集所有办主任评分人
+    
+    // 处理班子评分数据
+    for (const rating of banziRatingsResult.data) {
+      const subjectId = rating.subject;
+      const subjectName = subjectIdToNameMap[subjectId] || subjectId;
+      
+      if (!ratingData[subjectName]) {
+        ratingData[subjectName] = {
+          banziRatings: {},
+          zhucunRatings: {},
+          officeDirectorRatings: {}
+        };
+      }
+      ratingData[subjectName].banziRatings[rating.rater] = rating.total_score;
+      banziRaters.add(rating.rater);
+    }
+    
+    // 处理驻村评分数据 (合并A类和B类驻村表)
+    const processZhucunRatings = (ratings) => {
+      for (const rating of ratings) {
+        const subjectId = rating.subject;
+        const subjectName = subjectIdToNameMap[subjectId] || subjectId;
+        
+        if (!ratingData[subjectName]) {
+          ratingData[subjectName] = {
+            banziRatings: {},
+            zhucunRatings: {},
+            officeDirectorRatings: {}
+          };
+        }
+        ratingData[subjectName].zhucunRatings[rating.rater] = rating.total_score;
+        zhucunRaters.add(rating.rater);
+      }
+    };
+    
+    // 处理A类驻村表中B类考核对象评分
+    processZhucunRatings(aZhucunRatingsResult.data);
+    
+    // 处理B类驻村表中B类考核对象评分
+    processZhucunRatings(bZhucunRatingsResult.data);
+    
+    // 处理办主任评分数据
+    for (const rating of officeDirectorRatingsResult.data) {
+      const subjectId = rating.subject;
+      const subjectName = subjectIdToNameMap[subjectId] || subjectId;
+      
+      if (!ratingData[subjectName]) {
+        ratingData[subjectName] = {
+          banziRatings: {},
+          zhucunRatings: {},
+          officeDirectorRatings: {}
+        };
+      }
+      ratingData[subjectName].officeDirectorRatings[rating.rater] = rating.total_score;
+      officeDirectorRaters.add(rating.rater);
+    }
+    
+    console.log('收集到的班子评分人:', JSON.stringify(Array.from(banziRaters)));
+    console.log('收集到的驻村评分人:', JSON.stringify(Array.from(zhucunRaters)));
+    console.log('收集到的办主任评分人:', JSON.stringify(Array.from(officeDirectorRaters)));
+    
+    // 转换评分人集合为数组
+    const banziRaterArray = Array.from(banziRaters);
+    const zhucunRaterArray = Array.from(zhucunRaters);
+    const officeDirectorRaterArray = Array.from(officeDirectorRaters);
+    
+    // 更新进度 - 50%：创建Excel数据
+    if (incremental) await updateProgress(50, '正在创建Excel数据...');
+    
+    // 创建Excel工作表数据
+    const worksheetData = [];
+    
+    // 表头
+    const title = `老关镇${year}年度${description ? '(' + description + ')' : ''}绩效考核评分汇总表（B类）`;
+    worksheetData.push([title]);
+    
+    // 更新进度 - 60%：获取评分人信息
+    if (incremental) await updateProgress(60, '正在获取评分人信息...');
+    
+    // 获取评分人姓名
+    console.log('班子评分人账号列表:', JSON.stringify(banziRaterArray));
+    const banziRaterNames = [];
+    for (let i = 0; i < banziRaterArray.length; i++) {
+      const rater = banziRaterArray[i];
+      const userInfo = await userCollection.where({ username: rater }).get();
+      const raterName = userInfo.data.length > 0 ? userInfo.data[0].name : rater;
+      banziRaterNames.push({ username: rater, name: raterName });
+    }
+    console.log('班子评分人详情:', JSON.stringify(banziRaterNames));
+    
+    console.log('驻村评分人账号列表:', JSON.stringify(zhucunRaterArray));
+    const zhucunRaterNames = [];
+    for (let i = 0; i < zhucunRaterArray.length; i++) {
+      const rater = zhucunRaterArray[i];
+      const userInfo = await userCollection.where({ username: rater }).get();
+      const raterName = userInfo.data.length > 0 ? userInfo.data[0].name : rater;
+      zhucunRaterNames.push({ username: rater, name: raterName });
+    }
+    console.log('驻村评分人详情:', JSON.stringify(zhucunRaterNames));
+    
+    console.log('办主任评分人账号列表:', JSON.stringify(officeDirectorRaterArray));
+    const officeDirectorRaterNames = [];
+    for (let i = 0; i < officeDirectorRaterArray.length; i++) {
+      const rater = officeDirectorRaterArray[i];
+      const userInfo = await userCollection.where({ username: rater }).get();
+      const raterName = userInfo.data.length > 0 ? userInfo.data[0].name : rater;
+      officeDirectorRaterNames.push({ username: rater, name: raterName });
+    }
+    console.log('办主任评分人详情:', JSON.stringify(officeDirectorRaterNames));
+    
+    // 添加子表头行
+    worksheetData.push(['']);
+    
+    // 表头第二行 - 分管班子评分列
+    let headerRow1 = ['姓名', ''];
+    headerRow1.push('分管班子评分');
+    // 合并班子评分单元格，占据所有班子评分人的列数
+    for (let i = 0; i < banziRaterNames.length; i++) {
+      headerRow1.push('');
+    }
+    
+    // 驻村工作评分列
+    headerRow1.push('驻村工作评分');
+    // 合并驻村评分单元格，占据所有驻村评分人的列数
+    for (let i = 0; i < zhucunRaterNames.length; i++) {
+      headerRow1.push('');
+    }
+    
+    // 办主任评分列
+    headerRow1.push('办主任评分');
+    
+    // 计算列
+    headerRow1.push('');
+    headerRow1.push('');
+    headerRow1.push('');
+    headerRow1.push('');
+    
+    worksheetData.push(headerRow1);
+    
+    // 表头第三行 - 具体评分人和计算列
+    let headerRow2 = ['序号', '姓名'];
+    
+    // 添加班子评分人
+    for (const rater of banziRaterNames) {
+      headerRow2.push(`${rater.name}（班子）`);
+    }
+    // 添加班子评分平均分列
+    headerRow2.push('班子评分平均分');
+    
+    // 添加驻村评分人
+    for (const rater of zhucunRaterNames) {
+      headerRow2.push(`${rater.name}（驻村）`);
+    }
+    // 添加驻村评分平均分列
+    headerRow2.push('驻村工作平均分');
+    
+    // 添加办主任评分
+    headerRow2.push('办主任评分');
+    
+    // 添加计算列
+    headerRow2.push('总分（按班子：驻村：办主任=6：2：2换算）');
+    headerRow2.push('备注');
+    
+    worksheetData.push(headerRow2);
+    
+    // 更新进度 - 70%：添加评分数据
+    if (incremental) await updateProgress(70, '正在处理考核对象评分数据...');
+    
+    // 添加考核对象的评分数据
+    let rowIndex = 1;
+    for (const subject of subjects) {
+      const subjectName = subject.name;
+      const subjectRatingData = ratingData[subjectName] || { banziRatings: {}, zhucunRatings: {}, officeDirectorRatings: {} };
+      
+      // 每处理10个考核对象，更新一次进度（如果总数大于20）
+      if (incremental && subjects.length > 20 && rowIndex % 10 === 1) {
+        const progress = 70 + Math.floor((rowIndex / subjects.length) * 10);
+        await updateProgress(progress, `正在处理考核对象评分数据(${rowIndex}/${subjects.length})...`);
+      }
+      
+      const row = [];
+      row.push(rowIndex); // 序号
+      row.push(subjectName); // 姓名
+      
+      // 添加班子评分
+      let banziTotalScore = 0;
+      let banziScoreCount = 0;
+      
+      for (const rater of banziRaterNames) {
+        const score = subjectRatingData.banziRatings[rater.username] || '';
+        row.push(score);
+        if (score) {
+          banziTotalScore += score;
+          banziScoreCount++;
+        }
+      }
+      
+      // 班子评分平均分
+      const banziAvgScore = banziScoreCount > 0 ? (banziTotalScore / banziScoreCount).toFixed(2) : '';
+      row.push(banziAvgScore);
+      
+      // 添加驻村工作评分
+      let zhucunTotalScore = 0;
+      let zhucunScoreCount = 0;
+      
+      for (const rater of zhucunRaterNames) {
+        const score = subjectRatingData.zhucunRatings[rater.username] || '';
+        row.push(score);
+        if (score) {
+          zhucunTotalScore += score;
+          zhucunScoreCount++;
+        }
+      }
+      
+      // 驻村评分平均分
+      const zhucunAvgScore = zhucunScoreCount > 0 ? (zhucunTotalScore / zhucunScoreCount).toFixed(2) : '';
+      row.push(zhucunAvgScore);
+      
+      // 添加办主任评分
+      let officeDirectorScore = '';
+      if (officeDirectorRaterArray.length > 0) {
+        const rater = officeDirectorRaterArray[0]; // 取第一个办主任评分人
+        officeDirectorScore = subjectRatingData.officeDirectorRatings[rater] || '';
+      }
+      row.push(officeDirectorScore);
+      
+      // 计算总分（班子60%+驻村20%+办主任20%）
+      let totalScore = '';
+      if (banziAvgScore) {
+        let calculatedTotal = 0;
+        let weightSum = 0;
+        
+        if (banziAvgScore) {
+          calculatedTotal += parseFloat(banziAvgScore) * 0.6;
+          weightSum += 0.6;
+        }
+        
+        if (zhucunAvgScore) {
+          calculatedTotal += parseFloat(zhucunAvgScore) * 0.2;
+          weightSum += 0.2;
+        }
+        
+        if (officeDirectorScore) {
+          calculatedTotal += parseFloat(officeDirectorScore) * 0.2;
+          weightSum += 0.2;
+        }
+        
+        if (weightSum > 0) {
+          // 根据实际权重重新计算总分
+          totalScore = (calculatedTotal / weightSum * 1).toFixed(2);
+        }
+      }
+      
+      row.push(totalScore);
+      
+      // 备注列
+      row.push('');
+      
+      worksheetData.push(row);
+      rowIndex++;
+    }
+    
+    // 更新进度 - 80%：设置Excel格式
+    if (incremental) await updateProgress(80, '正在设置Excel格式...');
+    
+    // 设置列宽
+    const options = {
+      '!cols': [
+        { wch: 5 },  // 序号
+        { wch: 15 }, // 姓名
+      ]
+    };
+    
+    // 添加班子评分人列宽
+    for (let i = 0; i < banziRaterNames.length; i++) {
+      options['!cols'].push({ wch: 12 });
+    }
+    
+    // 班子平均分列宽
+    options['!cols'].push({ wch: 15 });
+    
+    // 添加驻村工作评分人列宽
+    for (let i = 0; i < zhucunRaterNames.length; i++) {
+      options['!cols'].push({ wch: 12 });
+    }
+    
+    // 驻村平均分列宽
+    options['!cols'].push({ wch: 15 });
+    
+    // 办主任评分列宽
+    options['!cols'].push({ wch: 15 });
+    
+    // 添加计算列宽
+    options['!cols'].push({ wch: 25 }); // 总分
+    options['!cols'].push({ wch: 15 }); // 备注
+    
+    // 使用node-xlsx构建Excel文件
+    console.log('准备构建Excel文件...');
+    
+    // 更新进度 - 85%：生成Excel文件
+    if (incremental) await updateProgress(85, '正在生成Excel文件...');
+    
+    try {
+      const buffer = xlsx.build([{
+        name: `B类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
+        data: worksheetData
+      }], options);
+      console.log('Excel文件构建成功，准备上传');
+      
+      // 更新进度 - 90%：上传文件
+      if (incremental) await updateProgress(90, '正在上传文件...');
+      
+      // 将Excel文件上传到云存储
+      const fileExtension = '.xlsx';
+      console.log('开始上传文件到云存储');
+      const uploadResult = await uniCloud.uploadFile({
+        cloudPath: `exports/B类评分汇总表-${year}年${description ? '(' + description + ')' : ''}-${Date.now()}${fileExtension}`,
+        fileContent: buffer
+      });
+      
+      console.log('文件上传成功，fileID:', uploadResult.fileID);
+      
+      // 更新进度 - 95%：获取下载链接
+      if (incremental) await updateProgress(95, '正在生成下载链接...');
+      
+      // 生成临时下载链接
+      console.log('开始获取临时下载链接');
+      const fileUrl = await uniCloud.getTempFileURL({
+        fileList: [uploadResult.fileID]
+      });
+      
+      console.log('获取临时下载链接成功:', fileUrl.fileList[0].tempFileURL);
+      
+      // 更新进度 - 100%：导出完成
+      if (incremental) await updateProgress(100, '导出完成！');
+      
+      return {
+        code: 0,
+        msg: '导出成功',
+        data: {
+          fileUrl: fileUrl.fileList[0].tempFileURL
+        }
+      };
+    } catch (excelError) {
+      console.error('构建或上传Excel文件失败:', excelError);
+      return {
+        code: -1,
+        msg: '构建Excel文件失败: ' + excelError.message,
+        error: excelError.message
+      };
+    }
+    
+  } catch (e) {
+    console.error('导出B类评分汇总表失败:', e);
+    return {
+      code: -1,
+      msg: '导出B类评分汇总表失败: ' + e.message,
       error: e.message
     };
   }

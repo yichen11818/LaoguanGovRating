@@ -46,6 +46,8 @@ exports.main = async (event, context) => {
       return await callExportExcel(data);
     case 'startExportATypeRatings':
       return await startExportATypeRatings(data);
+    case 'startExportBTypeRatings':
+      return await startExportBTypeRatings(data);
     case 'getExportTaskStatus':
       return await getExportTaskStatus(data);
     case 'updateExportTaskStatus':
@@ -1808,5 +1810,96 @@ async function getTableSubjectAndScore(data) {
       msg: '获取评分表、考核对象和分数失败',
       error: e.message
     };
+  }
+} 
+
+// 开始导出B类评分任务（增量式处理）
+async function startExportBTypeRatings(data) {
+  try {
+    console.log('开始创建B类评分导出任务，参数:', JSON.stringify(data));
+    
+    // 创建导出任务记录
+    const taskId = 'export_B_' + Date.now();
+    await exportTasksCollection.add({
+      task_id: taskId,
+      status: 'pending',
+      progress: 0,
+      message: '正在初始化B类评分导出任务...',
+      create_time: new Date(),
+      update_time: new Date(),
+      params: data,
+      export_type: 'B'
+    });
+    
+    console.log('成功创建B类评分导出任务，task_id:', taskId);
+    
+    // 启动异步处理（不阻塞当前请求）
+    setTimeout(async () => {
+      try {
+        await processExportBTypeTask(taskId, data);
+      } catch (error) {
+        console.error('处理B类评分导出任务出错:', error);
+        await updateTaskProgress(taskId, 0, '导出失败: ' + error.message, 'failed');
+      }
+    }, 0);
+    
+    // 立即返回任务ID给前端
+    return {
+      code: 0,
+      msg: 'B类评分导出任务已创建，正在处理中',
+      data: {
+        task_id: taskId
+      }
+    };
+  } catch (e) {
+    console.error('创建B类评分导出任务失败:', e);
+    return {
+      code: -1,
+      msg: '创建B类评分导出任务失败: ' + e.message,
+      error: e.message
+    };
+  }
+}
+
+// 处理B类评分导出任务的步骤
+async function processExportBTypeTask(taskId, data) {
+  try {
+    // 步骤1: 更新状态为"处理中"
+    await updateTaskProgress(taskId, 10, '正在准备B类评分导出...');
+    
+    // 步骤2: 调用导出函数，传递任务ID以便更新进度
+    const result = await uniCloud.callFunction({
+      name: 'exportExcel',
+      data: {
+        action: 'exportBTypeRatings',
+        data: {
+          ...data,
+          task_id: taskId,
+          incremental: true  // 标记为增量处理
+        }
+      }
+    });
+    
+    if (result.result.code === 0) {
+      // 导出成功
+      await updateTaskProgress(
+        taskId, 
+        100, 
+        'B类评分导出完成', 
+        'completed', 
+        { fileUrl: result.result.data.fileUrl }
+      );
+    } else {
+      // 导出失败
+      await updateTaskProgress(
+        taskId, 
+        0, 
+        'B类评分导出失败: ' + (result.result.msg || '未知错误'), 
+        'failed'
+      );
+    }
+  } catch (error) {
+    console.error('处理B类评分导出任务出错:', error);
+    await updateTaskProgress(taskId, 0, 'B类评分导出失败: ' + error.message, 'failed');
   }
 } 
