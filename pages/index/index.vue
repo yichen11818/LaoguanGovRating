@@ -132,7 +132,7 @@
 					<text>系统公告</text>
 				</view>
 				<view class="notice-content">
-					<text class="notice-text">欢迎使用老关镇绩效管理评分系统，您当前为普通用户，暂无评分权限。如需获取评分权限，请联系管理员。</text>
+					<text class="notice-text">欢迎使用老关镇绩效管理评分系统，您当前为普通用户，暂无评分权限。请先前往`我的`页面登录。</text>
 				</view>
 			</view>
 		</view>

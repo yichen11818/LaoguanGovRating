@@ -43,7 +43,7 @@
 					</view>
 				</view>
 				
-				<view class="table-info">
+				<view class="table-info compact">
 					<view class="info-item">
 						<text class="info-label">分类:</text>
 						<text class="info-value">{{table.category || '无'}}</text>
@@ -56,6 +56,20 @@
 						<text class="info-label">项目数:</text>
 						<text class="info-value">{{table.items ? table.items.length : 0}}</text>
 					</view>
+				</view>
+				
+				<!-- 新增考核对象和评分信息区域 -->
+				<view class="subjects-info" v-if="table.subjects && table.subjects.length > 0">
+					<text class="subject-title">考核对象：</text>
+					<view class="subjects-list">
+						<view class="subject-item" v-for="(subject, sidx) in table.subjects" :key="sidx">
+							<text class="subject-name">{{subject.name}}</text>
+							<text class="subject-score" v-if="subject.score !== undefined">{{subject.score}}分</text>
+						</view>
+					</view>
+				</view>
+				<view class="subjects-info" v-else>
+					<text class="subject-title">未设置考核对象</text>
 				</view>
 			</view>
 		</view>
@@ -626,10 +640,11 @@
 				console.log('开始加载评分表，当前评分人列表数量:', this.raters.length);
 				const type = this.typeOptions[this.currentTypeIndex].id;
 				
+				// 使用新的getTableSubjectAndScore函数获取表格、考核对象和评分数据
 				uniCloud.callFunction({
 					name: 'ratingTable',
 					data: {
-						action: 'getTables',
+						action: 'getTableSubjectAndScore',
 						data: {
 							type: type > 0 ? type : undefined,
 							page: this.page,
@@ -644,6 +659,72 @@
 					if (res.result.code === 0) {
 						const data = res.result.data;
 						console.log('评分表数据:', data);
+						
+						// 检查ratings数据结构
+						if (data.ratings) {
+							console.log('评分数据详情:', JSON.stringify(data.ratings));
+							// 输出第一个表格的ratings数据
+							const firstTableId = data.list && data.list.length > 0 ? data.list[0]._id : null;
+							if (firstTableId && data.ratings[firstTableId]) {
+								console.log(`第一个表格(${firstTableId})的ratings数据:`, data.ratings[firstTableId]);
+							} else {
+								console.log('第一个表格没有ratings数据');
+							}
+						} else {
+							console.log('没有ratings数据');
+						}
+						
+						// 处理返回的数据，为每个表添加考核对象和分数信息
+						if (data.list && Array.isArray(data.list)) {
+							data.list.forEach(table => {
+								// 如果没有subjects字段，添加空数组
+								if (!table.subjects) {
+									table.subjects = [];
+								}
+								
+								// 如果表格没有考核对象信息，通过其他方式获取（如从相关数据中提取）
+								if (data.subjects && data.subjects[table._id]) {
+									table.subjects = data.subjects[table._id];
+								}
+								
+								// 处理评分数据，将分数添加到考核对象
+								if (data.ratings && data.ratings[table._id]) {
+									const tableRatings = data.ratings[table._id];
+									// 调试日志：查看评分数据结构
+									console.log(`表格${table._id}的评分数据:`, tableRatings);
+									
+									// 将评分添加到对应的考核对象
+									table.subjects.forEach(subject => {
+										// 调试日志：查看当前考核对象
+										console.log(`处理考核对象:`, {
+											_id: subject._id,
+											name: subject.name,
+											department: subject.department
+										});
+										
+										// 使用考核对象的名称匹配ratings表中的subject字段
+										const subjectRating = tableRatings.find(r => {
+											// 详细输出匹配过程
+											const idMatch = r.subject === subject._id;
+											const nameMatch = r.subject === subject.name;
+											console.log(`尝试匹配: rating.subject=${r.subject}, subject.name=${subject.name}, subject._id=${subject._id}, idMatch=${idMatch}, nameMatch=${nameMatch}`);
+											return nameMatch || idMatch;
+										});
+										
+										if (subjectRating) {
+											console.log(`找到匹配的评分数据:`, {
+												subject: subjectRating.subject,
+												score: subjectRating.total_score
+											});
+											subject.score = subjectRating.total_score || 0;
+										} else {
+											console.log(`未找到匹配的评分数据`);
+										}
+									});
+								}
+							});
+						}
+						
 						if (this.page === 1) {
 							this.tables = data.list;
 						} else {
@@ -660,6 +741,11 @@
 								rater: firstTable.rater,
 								displayName: this.getRaterName(firstTable.rater)
 							});
+							
+							// 打印考核对象和评分信息
+							if (firstTable.subjects && firstTable.subjects.length > 0) {
+								console.log('第一个表格考核对象:', firstTable.subjects);
+							}
 						}
 						
 						// 如果使用年份筛选，更新标题
@@ -692,59 +778,99 @@
 				
 				const typeValue = this.typeOptions[this.currentTypeIndex].id;
 				
+				// 使用新的getTableSubjectAndScore函数
 				uniCloud.callFunction({
 					name: 'ratingTable',
 					data: {
-						action: 'getTables',
+						action: 'getTableSubjectAndScore',
 						data: {
-							type: typeValue,
-							page: this.currentPage,
-							pageSize: 10,
+							type: typeValue > 0 ? typeValue : undefined,
+							page: this.page,
+							pageSize: this.pageSize,
 							keyword: this.searchKeyword,
-							year: this.yearFilter || '' // 确保传递年份参数
+							year: this.yearFilter || '', // 确保传递年份参数
+							group_id: this.groupId || '' // 传递表格组ID
 						}
 					}
 				}).then(res => {
 					if (res.result.code === 0) {
-						let tables;
-						// 确保数据是对象格式，并获取正确的list数组
-						if (res.result.data && res.result.data.list) {
-							tables = res.result.data.list;
-						} else if (Array.isArray(res.result.data)) {
-							tables = res.result.data;
-						} else {
-							tables = [];
-							console.error('意外的数据格式:', res.result.data);
-						}
+						const data = res.result.data;
+						let tables = data.list || [];
 						
-						// 如果有年份筛选，则过滤表格
-						if (this.yearFilter && Array.isArray(tables)) {
-							tables = tables.filter(table => {
-								// 从表名中提取年份
-								const yearRegex = new RegExp(this.yearFilter);
-								const nameMatch = table.name.match(yearRegex);
-								
-								// 从创建时间中提取年份
-								let createTimeMatch = false;
-								if (table.create_time) {
-									const createYear = new Date(table.create_time).getFullYear().toString();
-									createTimeMatch = createYear === this.yearFilter;
+						// 处理返回的数据，为每个表添加考核对象和分数信息
+						if (Array.isArray(tables)) {
+							tables.forEach(table => {
+								// 如果没有subjects字段，添加空数组
+								if (!table.subjects) {
+									table.subjects = [];
 								}
 								
-								return nameMatch || createTimeMatch;
+								// 如果表格没有考核对象信息，通过其他方式获取（如从相关数据中提取）
+								if (data.subjects && data.subjects[table._id]) {
+									table.subjects = data.subjects[table._id];
+								}
+								
+								// 处理评分数据，将分数添加到考核对象
+								if (data.ratings && data.ratings[table._id]) {
+									const tableRatings = data.ratings[table._id];
+									// 调试日志：查看评分数据结构
+									console.log(`表格${table._id}的评分数据:`, tableRatings);
+									
+									// 将评分添加到对应的考核对象
+									table.subjects.forEach(subject => {
+										// 调试日志：查看当前考核对象
+										console.log(`处理考核对象:`, {
+											_id: subject._id,
+											name: subject.name,
+											department: subject.department
+										});
+										
+										// 使用考核对象的名称匹配ratings表中的subject字段
+										const subjectRating = tableRatings.find(r => {
+											// 详细输出匹配过程
+											const idMatch = r.subject === subject._id;
+											const nameMatch = r.subject === subject.name;
+											console.log(`尝试匹配: rating.subject=${r.subject}, subject.name=${subject.name}, subject._id=${subject._id}, idMatch=${idMatch}, nameMatch=${nameMatch}`);
+											return nameMatch || idMatch;
+										});
+										
+										if (subjectRating) {
+											console.log(`找到匹配的评分数据:`, {
+												subject: subjectRating.subject,
+												score: subjectRating.total_score
+											});
+											subject.score = subjectRating.total_score || 0;
+										} else {
+											console.log(`未找到匹配的评分数据`);
+										}
+									});
+								}
 							});
 						}
 						
-						if (this.currentPage === 1) {
+						if (this.page === 1) {
 							this.tables = tables;
 						} else {
 							this.tables = [...this.tables, ...(Array.isArray(tables) ? tables : [])];
 						}
 						
-						this.hasMoreData = Array.isArray(tables) && tables.length === 10;
+						this.hasMoreData = Array.isArray(tables) && tables.length === this.pageSize;
+						
+						// 打印第一个表格的评分人和考核对象信息（用于调试）
+						if (this.tables.length > 0) {
+							const firstTable = this.tables[0];
+							console.log('第一个表格评分人:', {
+								rater: firstTable.rater,
+								displayName: this.getRaterName(firstTable.rater)
+							});
+							
+							if (firstTable.subjects && firstTable.subjects.length > 0) {
+								console.log('第一个表格考核对象:', firstTable.subjects.length, '个');
+							}
+						}
 					} else {
 						uni.showToast({
-							title: '获取数据失败',
+							title: res.result.msg || '获取数据失败',
 							icon: 'none'
 						});
 					}
@@ -763,7 +889,7 @@
 			loadMore() {
 				if (this.isLoading || !this.hasMoreData) return;
 				
-				this.currentPage++;
+				this.page++; // 注意：使用page而不是currentPage，与loadTables保持一致
 				this.loadData();
 			},
 			
@@ -904,8 +1030,8 @@
 						});
 						
 						this.hideAddTablePopup();
-						this.currentPage = 1;
-						this.loadData();
+						this.page = 1;
+						this.loadTables();
 					} else {
 						uni.showToast({
 							title: res.result.msg || '创建失败',
@@ -1037,7 +1163,8 @@
 						});
 						
 						this.hideEditTablePopup();
-						this.loadData();
+						this.page = 1;
+						this.loadTables();
 					} else {
 						uni.showToast({
 							title: res.result.msg || '更新失败',
@@ -1842,11 +1969,13 @@
 					url: '/pages/admin/tables/years'
 				});
 			},
+			
+
 		}
 	}
 </script>
 
-<style>
+<style lang="scss">
 /* 全局变量和主题设置 */
 page {
 	--primary-color: #4080FF;
@@ -2021,36 +2150,31 @@ page {
 }
 
 /* 表格内容 */
-.table-info {
+.table-info.compact {
 	display: flex;
-	flex-direction: column;
-	padding: 10rpx 0;
-	background: linear-gradient(to bottom, var(--bg-light), #FDFDFD);
-	border-radius: 0 0 var(--card-radius) var(--card-radius);
-}
-
-.info-item {
-	display: flex;
-	align-items: center;
-	margin-top: 12rpx;
-	width: 100%;
-}
-
-.info-label {
-	font-size: 26rpx;
-	color: var(--text-secondary);
-	width: auto;
-	margin-right: 12rpx;
-	font-weight: 500;
-}
-
-.info-value {
-	font-size: 26rpx;
-	color: var(--text-regular);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	flex: 1;
+	flex-direction: row;
+	flex-wrap: wrap;
+	padding: 5px 10px;
+	background-color: #f8f8f8;
+	border-radius: 4px;
+	margin-bottom: 8px;
+	
+	.info-item {
+		margin-right: 15px;
+		margin-bottom: 2px;
+		
+		.info-label {
+			font-size: 12px;
+			color: #666;
+			margin-right: 4px;
+		}
+		
+		.info-value {
+			font-size: 12px;
+			color: #333;
+			font-weight: 500;
+		}
+	}
 }
 
 /* 操作按钮组 */
@@ -2735,5 +2859,47 @@ page {
 	display: flex;
 	justify-content: center;
 	align-items: center;
+}
+
+/* 考核对象信息区域 */
+.subjects-info {
+	padding: 5px 10px;
+	background-color: #f8f9fa;
+	border-radius: 4px;
+	margin-bottom: 6px;
+}
+
+.subject-title {
+	font-size: 12px;
+	color: #666;
+}
+
+.subjects-list {
+	display: flex;
+	flex-direction: row;
+	flex-wrap: wrap;
+	margin-top: 3px;
+}
+
+.subject-item {
+	display: flex;
+	align-items: center;
+	background-color: #eef5ff;
+	border-radius: 3px;
+	padding: 2px 6px;
+	margin-right: 8px;
+	margin-bottom: 4px;
+}
+
+.subject-name {
+	font-size: 12px;
+	color: #333;
+}
+
+.subject-score {
+	font-size: 12px;
+	color: #1890ff;
+	font-weight: 500;
+	margin-left: 3px;
 }
 </style> 

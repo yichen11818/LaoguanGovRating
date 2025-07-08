@@ -8,9 +8,11 @@
 			</button>
 		</view>
 		
-		<!-- 导出A类评分功能 -->
-		<view class="export-section">
+		<!-- 操作按钮区域 -->
+		<view class="action-section">
+			<!-- 导出A类评分功能 -->
 			<button class="export-btn" @click="exportATypeRatings">导出A类评分汇总表</button>
+			
 		</view>
 		
 		<view class="year-list" v-if="years.length > 0">
@@ -56,17 +58,35 @@
 		<uni-popup ref="exportPopup" type="center">
 			<view class="popup-content">
 				<view class="popup-title">导出A类评分汇总表</view>
-				<view class="form-item">
-					<text class="form-label">选择年度</text>
-					<picker @change="handleYearChange" :value="exportData.yearIndex" :range="years" range-key="year">
-						<view class="picker-box">
-							<text class="picker-text">{{years[exportData.yearIndex]?.year || '请选择年度'}}{{years[exportData.yearIndex]?.description ? ' (' + years[exportData.yearIndex].description + ')' : ''}}</text>
-						</view>
-					</picker>
+				
+				<!-- 导出表单 - 未开始导出时显示 -->
+				<view v-if="!exportTask.inProgress">
+					<view class="form-item">
+						<text class="form-label">选择年度</text>
+						<picker @change="handleYearChange" :value="exportData.yearIndex" :range="years" range-key="year">
+							<view class="picker-box">
+								<text class="picker-text">{{years[exportData.yearIndex]?.year || '请选择年度'}}{{years[exportData.yearIndex]?.description ? ' (' + years[exportData.yearIndex].description + ')' : ''}}</text>
+							</view>
+						</picker>
+					</view>
+					<view class="popup-btns">
+						<button class="cancel-btn" size="mini" @click="hideExportPopup">取消</button>
+						<button class="confirm-btn" size="mini" @click="confirmExport">确定</button>
+					</view>
 				</view>
-				<view class="popup-btns">
-					<button class="cancel-btn" size="mini" @click="hideExportPopup">取消</button>
-					<button class="confirm-btn" size="mini" @click="confirmExport">确定</button>
+				
+				<!-- 导出进度 - 导出进行中显示 -->
+				<view v-else class="export-progress-container">
+					<view class="progress-title">{{exportTask.message || '正在处理...'}}</view>
+					
+					<view class="progress-bar-container">
+						<view class="progress-bar" :style="{width: exportTask.progress + '%'}"></view>
+					</view>
+					<view class="progress-text">{{exportTask.progress}}%</view>
+					
+					<view class="popup-btns" v-if="exportTask.status === 'failed'">
+						<button class="confirm-btn" size="mini" @click="hideExportPopup">关闭</button>
+					</view>
 				</view>
 			</view>
 		</uni-popup>
@@ -88,6 +108,16 @@
 					year: null,
 					group_id: null,
 					description: null
+				},
+				// 导出任务状态
+				exportTask: {
+					taskId: '',
+					polling: false,
+					inProgress: false,
+					progress: 0,
+					message: '',
+					status: '',
+					result: null
 				}
 			}
 		},
@@ -226,9 +256,27 @@
 				this.$refs.exportPopup.open();
 			},
 			
-			// 隐藏导出弹窗
+			// 隐藏导出A类评分弹窗
 			hideExportPopup() {
 				this.$refs.exportPopup.close();
+				
+				// 如果有正在进行的导出任务，取消轮询
+				if (this.exportTask.polling) {
+					this.exportTask.polling = false;
+				}
+				
+				// 重置导出任务状态
+				setTimeout(() => {
+					this.exportTask = {
+						taskId: '',
+						polling: false,
+						inProgress: false,
+						progress: 0,
+						message: '',
+						status: '',
+						result: null
+					};
+				}, 300);
 			},
 			
 			// 选择年度变化
@@ -292,10 +340,6 @@
 				
 				console.log('开始导出操作，参数：', JSON.stringify(this.exportData));
 				
-				uni.showLoading({
-					title: '正在检查数据...'
-				});
-				
 				// 先检查是否有A类评分表
 				const checkResult = await this.checkATypeRatings();
 				console.log('检查A类评分表结果:', JSON.stringify(checkResult));
@@ -320,109 +364,319 @@
 						});
 						return;
 					}
+					
+					// 重置导出任务状态
+					this.exportTask = {
+						taskId: '',
+						polling: false,
+						inProgress: true,
+						progress: 0,
+						message: '正在创建导出任务...',
+						status: 'pending',
+						result: null
+					};
+					
+					try {
+						console.log('开始增量导出A类评分汇总表，参数:', JSON.stringify({
+							group_id: this.exportData.group_id,
+							year: this.exportData.year,
+							description: this.exportData.description || ''
+						}));
+						
+						// 调用云函数创建导出任务
+						const result = await uniCloud.callFunction({
+							name: 'ratingTable',
+							data: {
+								action: 'startExportATypeRatings',
+								data: {
+									group_id: this.exportData.group_id,
+									year: this.exportData.year,
+									description: this.exportData.description || ''
+								}
+							}
+						});
+						
+						console.log('创建导出任务返回结果:', JSON.stringify(result.result));
+						
+						if (result.result.code === 0) {
+							// 获取任务ID，开始轮询任务状态
+							this.exportTask.taskId = result.result.data.task_id;
+							this.exportTask.message = '导出任务已创建，正在处理...';
+							this.exportTask.polling = true;
+							
+							// 开始轮询任务状态
+							this.startPollingTaskStatus();
+						} else {
+							// 显示更详细的错误信息
+							console.error('创建导出任务失败:', JSON.stringify(result.result));
+							this.exportTask.inProgress = false;
+							this.exportTask.message = result.result.msg || '创建导出任务失败';
+							this.exportTask.status = 'failed';
+							
+							uni.showModal({
+								title: '导出失败',
+								content: result.result.msg || '创建导出任务失败',
+								showCancel: false
+							});
+						}
+					} catch (e) {
+						console.error('创建导出任务失败:', JSON.stringify(e));
+						this.exportTask.inProgress = false;
+						this.exportTask.message = '创建导出任务失败: ' + e.message;
+						this.exportTask.status = 'failed';
+						
+						uni.showToast({
+							title: '导出失败',
+							icon: 'none'
+						});
+					}
 				} else {
-					// 检查失败，但仍然尝试导出
-					console.warn('检查A类评分表失败，仍然尝试导出');
+					// 检查失败
+					uni.showModal({
+						title: '导出失败',
+						content: checkResult.error || '检查评分表失败',
+						showCancel: false
+					});
+				}
+			},
+			
+			// 开始轮询任务状态
+			startPollingTaskStatus() {
+				if (!this.exportTask.taskId || !this.exportTask.polling) {
+					return;
 				}
 				
+				// 定义轮询间隔（1秒）
+				const pollingInterval = 1000;
+				
+				// 创建轮询函数
+				const pollStatus = async () => {
+					if (!this.exportTask.polling) {
+						return;
+					}
+					
+					try {
+						const result = await uniCloud.callFunction({
+							name: 'ratingTable',
+							data: {
+								action: 'getExportTaskStatus',
+								data: {
+									task_id: this.exportTask.taskId
+								}
+							}
+						});
+						
+						if (result.result.code === 0) {
+							const taskData = result.result.data;
+							this.exportTask.progress = taskData.progress;
+							this.exportTask.message = taskData.message;
+							this.exportTask.status = taskData.status;
+							
+							if (taskData.status === 'completed') {
+								// 任务完成，停止轮询
+								this.exportTask.polling = false;
+								this.exportTask.inProgress = false;
+								this.exportTask.result = taskData.result;
+								
+								// 显示成功消息
+								uni.showToast({
+									title: '导出成功',
+									icon: 'success'
+								});
+								
+								// 下载文件
+								this.downloadExportedFile(taskData.result.fileUrl);
+							} else if (taskData.status === 'failed') {
+								// 任务失败，停止轮询
+								this.exportTask.polling = false;
+								this.exportTask.inProgress = false;
+								
+								uni.showModal({
+									title: '导出失败',
+									content: taskData.message || '导出任务执行失败',
+									showCancel: false
+								});
+							} else {
+								// 任务仍在进行中，继续轮询
+								setTimeout(pollStatus, pollingInterval);
+							}
+						} else {
+							// API返回错误，停止轮询
+							this.exportTask.polling = false;
+							this.exportTask.inProgress = false;
+							this.exportTask.status = 'failed';
+							this.exportTask.message = result.result.msg || '获取任务状态失败';
+							
+							uni.showModal({
+								title: '导出失败',
+								content: result.result.msg || '获取任务状态失败',
+								showCancel: false
+							});
+						}
+					} catch (error) {
+						console.error('获取任务状态失败:', error);
+						
+						// 发生错误，但不立即停止轮询，再尝试几次
+						setTimeout(pollStatus, pollingInterval * 2); // 出错后加倍轮询间隔
+					}
+				};
+				
+				// 开始第一次轮询
+				setTimeout(pollStatus, pollingInterval);
+			},
+			
+			// 下载导出的文件
+			downloadExportedFile(fileUrl) {
+				console.log('获取到文件URL:', fileUrl);
+				
+				// 在浏览器环境下提示下载链接
+				// #ifdef H5
+				console.log('H5环境，打开新窗口下载');
+				window.open(fileUrl, '_blank');
+				// #endif
+				
+				// 在APP环境下下载文件
+				// #ifdef APP-PLUS
+				console.log('APP环境，开始下载文件');
 				uni.showLoading({
-					title: '正在导出...'
+					title: '正在下载文件...'
 				});
 				
-				try {
-					console.log('开始导出A类评分汇总表，参数:', JSON.stringify({
-						group_id: this.exportData.group_id,
-						year: this.exportData.year,
-						description: this.exportData.description || ''
-					}));
-					
-					// 调用云函数导出A类评分汇总
-					console.log('准备调用云函数ratingTable/exportATypeRatings');
-					const result = await uniCloud.callFunction({
-						name: 'ratingTable',
-						data: {
-							action: 'exportATypeRatings',
-							data: {
-								group_id: this.exportData.group_id,
-								year: this.exportData.year,
-								description: this.exportData.description || ''
-							}
-						}
-					});
-					
-					console.log('云函数返回结果:', JSON.stringify(result.result));
-					
-					if (result.result.code === 0) {
-						// 下载导出的文件
-						const fileUrl = result.result.data.fileUrl;
-						console.log('获取到文件URL:', fileUrl);
+				// 下载文件到手机
+				const downloadTask = uni.downloadFile({
+					url: fileUrl,
+					success: (res) => {
+						console.log('下载成功:', JSON.stringify(res));
+						uni.hideLoading();
 						
-						// 在浏览器环境下提示下载链接
-						// #ifdef H5
-						console.log('H5环境，打开新窗口下载');
-						window.open(fileUrl, '_blank');
-						// #endif
-						
-						// 在APP环境下下载文件
-						// #ifdef APP-PLUS
-						console.log('APP环境，开始下载文件');
-						uni.showToast({
-							title: '导出成功，正在下载...',
-							icon: 'none',
-							duration: 2000
-						});
-						
-						// 下载文件到手机
-						const downloadTask = uni.downloadFile({
-							url: fileUrl,
-							success: (res) => {
-								console.log('下载成功:', JSON.stringify(res));
-								if (res.statusCode === 200) {
-									uni.saveFile({
-										tempFilePath: res.tempFilePath,
-										success: (saveRes) => {
-											console.log('保存成功:', JSON.stringify(saveRes));
-											uni.openDocument({
-												filePath: saveRes.savedFilePath,
-												success: () => {
-													console.log('打开文档成功');
-												},
-												fail: (err) => {
-													console.error('打开文档失败:', JSON.stringify(err));
-												}
-											});
+						if (res.statusCode === 200) {
+							uni.showLoading({
+								title: '准备打开文件...'
+							});
+							
+							uni.saveFile({
+								tempFilePath: res.tempFilePath,
+								success: (saveRes) => {
+									console.log('保存成功:', JSON.stringify(saveRes));
+									uni.hideLoading();
+									
+									// 尝试打开文档
+									uni.openDocument({
+										filePath: saveRes.savedFilePath,
+										showMenu: true,
+										success: () => {
+											console.log('打开文档成功');
 										},
 										fail: (err) => {
-											console.error('保存文件失败:', JSON.stringify(err));
+											console.error('打开文档失败:', JSON.stringify(err));
+											uni.showModal({
+												title: '无法打开文件',
+												content: '文件已下载成功，但无法自动打开。请检查是否安装了相应的应用程序打开此类文件。',
+												confirmText: '我知道了',
+												showCancel: false
+											});
+										},
+										complete: () => {
+											uni.hideLoading();
 										}
 									});
+								},
+								fail: (err) => {
+									console.error('保存文件失败:', JSON.stringify(err));
+									uni.hideLoading();
+									uni.showModal({
+										title: '保存失败',
+										content: '文件下载成功，但保存到本地时出错: ' + (err.errMsg || JSON.stringify(err)),
+										showCancel: false
+									});
 								}
-							},
-							fail: (err) => {
-								console.error('下载文件失败:', JSON.stringify(err));
-							}
-						});
-						// #endif
-						
-						this.hideExportPopup();
-					} else {
-						// 显示更详细的错误信息
-						console.error('导出失败:', JSON.stringify(result.result));
+							});
+						} else {
+							uni.showToast({
+								title: '下载失败: ' + res.statusCode,
+								icon: 'none',
+								duration: 2000
+							});
+						}
+					},
+					fail: (err) => {
+						console.error('下载文件失败:', JSON.stringify(err));
+						uni.hideLoading();
 						uni.showModal({
-							title: '导出失败',
-							content: result.result.msg || '导出A类评分汇总表失败，请检查是否有符合条件的评分表',
+							title: '下载失败',
+							content: '无法下载文件: ' + (err.errMsg || JSON.stringify(err)),
 							showCancel: false
 						});
 					}
-				} catch (e) {
-					console.error('导出A类评分汇总表失败:', JSON.stringify(e));
-					uni.showToast({
-						title: '导出失败',
-						icon: 'none'
-					});
-				} finally {
-					uni.hideLoading();
-				}
+				});
+				
+				// 监听下载进度
+				downloadTask.onProgressUpdate((res) => {
+					console.log('下载进度:', res.progress);
+					if (res.progress > 0) {
+						uni.showLoading({
+							title: '下载中: ' + res.progress + '%'
+						});
+					}
+				});
+				// #endif
+				
+				// #ifdef MP-WEIXIN
+				console.log('微信小程序环境，开始下载文件');
+				uni.showLoading({
+					title: '正在下载文件...'
+				});
+				
+				uni.downloadFile({
+					url: fileUrl,
+					success: (res) => {
+						uni.hideLoading();
+						console.log('下载成功:', JSON.stringify(res));
+						if (res.statusCode === 200) {
+							uni.showLoading({
+								title: '准备打开文件...'
+							});
+							
+							wx.openDocument({
+								filePath: res.tempFilePath,
+								showMenu: true,
+								success: function () {
+									console.log('打开文档成功');
+								},
+								fail: function(err) {
+									console.error('打开文件失败:', JSON.stringify(err));
+									uni.showModal({
+										title: '无法打开文件',
+										content: '文件已下载成功，但无法打开，请确认是否安装了相应的应用程序',
+										showCancel: false
+									});
+								},
+								complete: function() {
+									uni.hideLoading();
+								}
+							})
+						}
+					},
+					fail: (err) => {
+						uni.hideLoading();
+						console.error('下载文件失败:', JSON.stringify(err));
+						uni.showModal({
+							title: '下载失败',
+							content: '无法下载文件: ' + (err.errMsg || JSON.stringify(err)),
+							showCancel: false
+						});
+					}
+				});
+				// #endif
+				
+				this.hideExportPopup();
+			},
+			
+			// 查看评分详情表
+			viewRatingsDetail() {
+				uni.navigateTo({
+					url: '/pages/admin/ratings/ratings-detail'
+				});
 			}
 		}
 	}
@@ -445,7 +699,7 @@
 		font-weight: bold;
 	}
 	
-	.add-btn, .export-btn {
+	.add-btn, .export-btn, .view-ratings-btn {
 		background-color: #007AFF;
 		color: #FFFFFF;
 		font-size: 28rpx;
@@ -457,12 +711,17 @@
 	
 	.export-btn {
 		background-color: #0A8D2E;
-		margin-bottom: 20rpx;
 	}
 	
-	.export-section {
+	.view-ratings-btn {
+		background-color: #FF9500;
+		margin-left: 20rpx;
+	}
+	
+	.action-section {
 		display: flex;
-		justify-content: flex-start;
+		flex-wrap: wrap;
+		gap: 15rpx;
 		margin-bottom: 20rpx;
 	}
 	
@@ -597,5 +856,39 @@
 		width: 45%;
 		background-color: #007AFF;
 		color: #FFFFFF;
+	}
+
+	.export-progress-container {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding-top: 20rpx;
+	}
+
+	.progress-title {
+		font-size: 28rpx;
+		color: #333333;
+		margin-bottom: 20rpx;
+	}
+
+	.progress-bar-container {
+		width: 100%;
+		height: 10rpx;
+		background-color: #E0E0E0;
+		border-radius: 5rpx;
+		margin-bottom: 10rpx;
+		overflow: hidden;
+	}
+
+	.progress-bar {
+		height: 100%;
+		background: linear-gradient(to right, #007AFF, #6BA6FF);
+		border-radius: 5rpx;
+		transition: width 0.3s ease-in-out;
+	}
+
+	.progress-text {
+		font-size: 24rpx;
+		color: #666666;
 	}
 </style> 

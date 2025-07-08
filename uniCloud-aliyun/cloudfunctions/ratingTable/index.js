@@ -5,6 +5,7 @@ const userCollection = db.collection('users');
 const subjectCollection = db.collection('subjects');
 const groupCollection = db.collection('rating_groups');
 const ratingCollection = db.collection('ratings');
+const exportTasksCollection = db.collection('export_tasks'); // 添加导出任务集合
 
 exports.main = async (event, context) => {
   const { action, data } = event;
@@ -43,10 +44,20 @@ exports.main = async (event, context) => {
       return await checkATypeRatings(data);
     case 'exportATypeRatings':
       return await callExportExcel(data);
+    case 'startExportATypeRatings':
+      return await startExportATypeRatings(data);
+    case 'getExportTaskStatus':
+      return await getExportTaskStatus(data);
+    case 'updateExportTaskStatus':
+      return await updateTaskProgress(data.task_id, data.progress, data.message);
+    case 'getRatingsDetail':
+      return await getRatingsDetail(data);
+    case 'getTableSubjectAndScore':
+      return await getTableSubjectAndScore(data);
     default:
       return {
         code: -1,
-        msg: '未知操作'
+        msg: '未知操作1'
       };
   }
 };
@@ -1305,14 +1316,14 @@ async function callExportExcel(data) {
     if (!checkResult.hasBanziTable) {
       return {
         code: -1,
-        msg: '未找到班子评分表，请创建一个名称或类别包含"班子"的评分表'
+        msg: '未找到班子评分表，请检查是否有type=1的评分表'
       };
     }
     
     if (!checkResult.hasZhucunTable) {
       return {
         code: -1,
-        msg: '未找到驻村工作评分表，请创建一个名称或类别包含"驻村"的评分表'
+        msg: '未找到驻村工作评分表，请检查是否有type=2的评分表'
       };
     }
     
@@ -1335,6 +1346,466 @@ async function callExportExcel(data) {
     return {
       code: -1,
       msg: '导出A类评分汇总表失败: ' + e.message,
+      error: e.message
+    };
+  }
+}
+
+// 开始导出A类评分任务（增量式处理）
+async function startExportATypeRatings(data) {
+  try {
+    console.log('开始创建增量式导出任务，参数:', JSON.stringify(data));
+    
+    // 1. 先检查是否有A类评分表
+    const checkResult = await checkATypeRatings(data);
+    
+    if (!checkResult.hasBanziTable) {
+      return {
+        code: -1,
+        msg: '未找到班子评分表，请检查是否有type=1的评分表'
+      };
+    }
+    
+    if (!checkResult.hasZhucunTable) {
+      return {
+        code: -1,
+        msg: '未找到驻村工作评分表，请检查是否有type=2的评分表'
+      };
+    }
+    
+    // 2. 创建导出任务记录
+    const taskId = 'export_' + Date.now();
+    await exportTasksCollection.add({
+      task_id: taskId,
+      status: 'pending',
+      progress: 0,
+      message: '正在初始化导出任务...',
+      create_time: new Date(),
+      update_time: new Date(),
+      params: data
+    });
+    
+    console.log('成功创建导出任务，task_id:', taskId);
+    
+    // 3. 启动异步处理（不阻塞当前请求）
+    setTimeout(async () => {
+      try {
+        await processExportTask(taskId, data);
+      } catch (error) {
+        console.error('处理导出任务出错:', error);
+        await updateTaskProgress(taskId, 0, '导出失败: ' + error.message, 'failed');
+      }
+    }, 0);
+    
+    // 4. 立即返回任务ID给前端
+    return {
+      code: 0,
+      msg: '导出任务已创建，正在处理中',
+      data: {
+        task_id: taskId
+      }
+    };
+  } catch (e) {
+    console.error('创建导出任务失败:', e);
+    return {
+      code: -1,
+      msg: '创建导出任务失败: ' + e.message,
+      error: e.message
+    };
+  }
+}
+
+// 处理导出任务的步骤
+async function processExportTask(taskId, data) {
+  try {
+    // 步骤1: 更新状态为"处理中"
+    await updateTaskProgress(taskId, 10, '正在准备导出...');
+    
+    // 步骤2: 调用导出函数，传递任务ID以便更新进度
+    const result = await uniCloud.callFunction({
+      name: 'exportExcel',
+      data: {
+        action: 'exportATypeRatings',
+        data: {
+          ...data,
+          task_id: taskId,
+          incremental: true  // 标记为增量处理
+        }
+      }
+    });
+    
+    if (result.result.code === 0) {
+      // 导出成功
+      await updateTaskProgress(
+        taskId, 
+        100, 
+        '导出完成', 
+        'completed', 
+        { fileUrl: result.result.data.fileUrl }
+      );
+    } else {
+      // 导出失败
+      await updateTaskProgress(
+        taskId, 
+        0, 
+        '导出失败: ' + (result.result.msg || '未知错误'), 
+        'failed'
+      );
+    }
+  } catch (error) {
+    console.error('处理导出任务出错:', error);
+    await updateTaskProgress(taskId, 0, '导出失败: ' + error.message, 'failed');
+  }
+}
+
+// 更新任务进度
+async function updateTaskProgress(taskId, progress, message, status = 'processing', result = null) {
+  try {
+    const updateData = {
+      progress: progress,
+      message: message,
+      update_time: new Date()
+    };
+    
+    if (status) {
+      updateData.status = status;
+    }
+    
+    if (status === 'completed' && result) {
+      updateData.result = result;
+      updateData.complete_time = new Date();
+    } else if (status === 'failed') {
+      updateData.complete_time = new Date();
+    }
+    
+    await exportTasksCollection.where({ task_id: taskId }).update(updateData);
+    
+    console.log(`已更新任务${taskId}进度: ${progress}%, 消息: ${message}, 状态: ${status || 'processing'}`);
+  } catch (error) {
+    console.error('更新任务进度失败:', error);
+  }
+}
+
+// 获取导出任务状态
+async function getExportTaskStatus(data) {
+  const { task_id } = data;
+  
+  if (!task_id) {
+    return {
+      code: -1,
+      msg: '缺少任务ID参数'
+    };
+  }
+  
+  try {
+    const result = await exportTasksCollection.where({ task_id }).get();
+    
+    if (result.data.length === 0) {
+      return {
+        code: -1,
+        msg: '任务不存在'
+      };
+    }
+    
+    const task = result.data[0];
+    
+    return {
+      code: 0,
+      msg: '获取任务状态成功',
+      data: task
+    };
+  } catch (e) {
+    console.error('获取任务状态失败:', e);
+    return {
+      code: -1,
+      msg: '获取任务状态失败: ' + e.message,
+      error: e.message
+    };
+  }
+} 
+
+// 获取评分详情数据（用于评分详情表页面）
+async function getRatingsDetail(data) {
+  const { group_id, table_type } = data;
+  
+  try {
+    // 参数校验
+    if (!group_id) {
+      return {
+        code: -1,
+        msg: '缺少必要参数：group_id'
+      };
+    }
+    
+    console.log('开始获取评分详情数据，参数:', { group_id, table_type });
+    
+    // 1. 获取指定组内的所有评分表
+    const tablesQuery = ratingTableCollection.where({ group_id });
+    
+    // 如果指定了表格类型，添加类型筛选
+    if (table_type) {
+      tablesQuery.where({ type: table_type });
+    }
+    
+    const tablesResult = await tablesQuery.get();
+    const tables = tablesResult.data;
+    
+    if (tables.length === 0) {
+      return {
+        code: 0,
+        msg: '未找到评分表数据',
+        data: {
+          raters: [],
+          subjects: [],
+          ratings: []
+        }
+      };
+    }
+    
+    console.log(`找到${tables.length}个评分表`);
+    
+    // 获取所有评分表ID
+    const tableIds = tables.map(table => table._id);
+    
+    // 2. 获取相关联的所有考核对象
+    const subjectsResult = await subjectCollection.where({
+      table_id: db.command.in(tableIds)
+    }).get();
+    
+    const subjects = subjectsResult.data;
+    console.log(`找到${subjects.length}个考核对象`);
+    
+    // 获取所有考核对象ID
+    const subjectIds = subjects.map(subject => subject._id);
+    
+    // 3. 获取相关的所有评分记录
+    const ratingsResult = await ratingCollection.where({
+      table_id: db.command.in(tableIds),
+      subject: db.command.in(subjectIds)
+    }).get();
+    
+    const ratings = ratingsResult.data;
+    console.log(`找到${ratings.length}条评分记录`);
+    
+    // 4. 获取所有评分员信息
+    // 先从评分表中获取所有评分员用户名
+    const raterUsernames = [...new Set(tables.map(table => table.rater))];
+    
+    const ratersResult = await userCollection.where({
+      username: db.command.in(raterUsernames)
+    }).field({
+      _id: true,
+      username: true,
+      name: true,
+      role: true
+    }).get();
+    
+    const raters = ratersResult.data.map(rater => ({
+      id: rater._id,
+      username: rater.username,
+      name: rater.name || rater.username,
+      role: rater.role
+    }));
+    
+    console.log(`找到${raters.length}个评分员`);
+    
+    // 5. 处理评分数据，适配前端表格显示
+    const processedRatings = ratings.map(rating => {
+      return {
+        id: rating._id,
+        table_id: rating.table_id,
+        rater_id: rating.rater_id,
+        subject_id: rating.subject,
+        total_score: rating.total_score,
+        items: rating.items || [],
+        comment: rating.comment || '',
+        rating_date: rating.rating_date
+      };
+    });
+    
+    return {
+      code: 0,
+      msg: '获取评分详情数据成功',
+      data: {
+        raters,
+        subjects,
+        ratings: processedRatings
+      }
+    };
+  } catch (e) {
+    console.error('获取评分详情数据失败:', e);
+    return {
+      code: -1,
+      msg: '获取评分详情数据失败',
+      error: e.message
+    };
+  }
+}
+
+// 新增函数：获取评分表、考核对象和分数
+async function getTableSubjectAndScore(data) {
+  const { type, page = 1, pageSize = 10, keyword = '', year = '', group_id = '' } = data;
+  
+  try {
+    // 1. 获取评分表列表
+    let query = ratingTableCollection;
+    
+    // 处理类型筛选
+    if (type) {
+      query = query.where({
+        type
+      });
+    }
+    
+    // 处理关键词筛选
+    if (keyword) {
+      query = query.where({
+        name: new RegExp(keyword, 'i')
+      });
+    }
+    
+    // 处理年份筛选
+    if (year) {
+      console.log('按年份筛选:', year);
+      if (group_id) {
+        query = query.where({
+          group_id
+        });
+      } else {
+        query = query.where({
+          name: new RegExp(year, 'i')
+        });
+      }
+    }
+    
+    // 处理表格组筛选
+    if (group_id && !year) {
+      query = query.where({
+        group_id
+      });
+    }
+    
+    // 获取总数
+    const countResult = await query.count();
+    
+    // 分页查询
+    const result = await query.skip((page - 1) * pageSize).limit(pageSize).get();
+    const tables = result.data;
+    console.log(`获取到${tables.length}个评分表`);
+    
+    // 2. 获取考核对象数据
+    let subjectsData = {};
+    let ratingsData = {};
+    
+    if (tables.length > 0) {
+      const tableIds = tables.map(table => table._id);
+      
+      // 获取这些表格关联的考核对象
+      const subjectsResult = await subjectCollection.where({
+        table_id: db.command.in(tableIds)
+      }).get();
+      
+      const subjects = subjectsResult.data;
+      console.log(`获取到${subjects.length}个考核对象`);
+      
+      // 按表格ID组织考核对象
+      subjects.forEach(subject => {
+        if (subject.table_id) {
+          // 确保table_id是数组
+          const tableIds = Array.isArray(subject.table_id) ? subject.table_id : [subject.table_id];
+          
+          tableIds.forEach(tableId => {
+            if (!subjectsData[tableId]) {
+              subjectsData[tableId] = [];
+            }
+            // 防止重复添加
+            if (!subjectsData[tableId].some(s => s._id === subject._id)) {
+              subjectsData[tableId].push({
+                _id: subject._id,
+                name: subject.name,
+                department: subject.department || '',
+                position: subject.position || ''
+              });
+            }
+          });
+        }
+      });
+      
+      // 3. 获取评分数据
+      // 收集所有考核对象ID
+      const subjectIds = subjects.map(subject => subject._id);
+      // 同时收集所有考核对象名称
+      const subjectNames = subjects.map(subject => subject.name);
+      
+      console.log(`收集到${subjectIds.length}个考核对象ID和${subjectNames.length}个考核对象名称`);
+      
+      // 获取评分数据
+      if (subjectIds.length > 0) {
+        // 使用 $or 条件同时匹配ID和名称
+        const ratingsResult = await ratingCollection.where({
+          table_id: db.command.in(tableIds),
+          $or: [
+            { subject: db.command.in(subjectIds) },  // 匹配ID
+            { subject: db.command.in(subjectNames) } // 匹配名称
+          ]
+        }).get();
+        
+        const ratings = ratingsResult.data;
+        console.log(`查询评分数据的条件: table_ids=${tableIds.length}个, subject_ids=${subjectIds.length}个`);
+        console.log(`获取到${ratings.length}条评分数据`);
+        
+        // 输出前5条评分数据作为样本
+        if (ratings.length > 0) {
+          console.log('评分数据样本:', ratings.slice(0, 5).map(r => ({
+            table_id: r.table_id,
+            subject: r.subject,
+            total_score: r.total_score
+          })));
+        }
+        
+        // 按表格ID组织评分数据
+        ratings.forEach(rating => {
+          if (!ratingsData[rating.table_id]) {
+            ratingsData[rating.table_id] = [];
+          }
+          ratingsData[rating.table_id].push({
+            _id: rating._id,
+            subject: rating.subject,
+            total_score: rating.total_score || 0,
+            scores: rating.scores || []
+          });
+        });
+        
+        // 检查处理后的评分数据
+        const tableWithRatings = Object.keys(ratingsData);
+        console.log(`共有${tableWithRatings.length}个表格有评分数据`);
+        if (tableWithRatings.length > 0) {
+          const sampleTableId = tableWithRatings[0];
+          console.log(`表格${sampleTableId}的评分数据:`, 
+            ratingsData[sampleTableId].map(r => ({
+              subject: r.subject,
+              total_score: r.total_score
+            }))
+          );
+        }
+      }
+    }
+    
+    return {
+      code: 0,
+      msg: '获取评分表、考核对象和分数成功',
+      data: {
+        list: tables,
+        total: countResult.total,
+        subjects: subjectsData,
+        ratings: ratingsData
+      }
+    };
+  } catch (e) {
+    console.error('获取评分表、考核对象和分数失败:', e);
+    return {
+      code: -1,
+      msg: '获取评分表、考核对象和分数失败',
       error: e.message
     };
   }

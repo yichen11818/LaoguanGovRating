@@ -6,7 +6,7 @@
 				<text class="table-type" v-if="table.type">{{getTableTypeName(table.type)}}</text>
 			</view>
 			<text class="table-category" v-if="table.category">分类：{{table.category}}</text>
-			<text class="table-rater">评分人：{{table.rater || '未分配'}}</text>
+			<text class="table-rater" copyable>评分人：{{table.rater || '未分配'}}</text>
 		</view>
 		
 		<view class="item-action">
