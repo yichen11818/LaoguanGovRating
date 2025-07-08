@@ -290,12 +290,16 @@
 					return;
 				}
 				
+				console.log('开始导出操作，参数：', JSON.stringify(this.exportData));
+				
 				uni.showLoading({
 					title: '正在检查数据...'
 				});
 				
 				// 先检查是否有A类评分表
 				const checkResult = await this.checkATypeRatings();
+				console.log('检查A类评分表结果:', JSON.stringify(checkResult));
+				
 				if (checkResult.success) {
 					if (!checkResult.hasATypeRatings) {
 						uni.hideLoading();
@@ -326,13 +330,14 @@
 				});
 				
 				try {
-					console.log('开始导出A类评分汇总表，参数:', {
+					console.log('开始导出A类评分汇总表，参数:', JSON.stringify({
 						group_id: this.exportData.group_id,
 						year: this.exportData.year,
-						description: this.exportData.description
-					});
+						description: this.exportData.description || ''
+					}));
 					
 					// 调用云函数导出A类评分汇总
+					console.log('准备调用云函数ratingTable/exportATypeRatings');
 					const result = await uniCloud.callFunction({
 						name: 'ratingTable',
 						data: {
@@ -340,22 +345,27 @@
 							data: {
 								group_id: this.exportData.group_id,
 								year: this.exportData.year,
-								description: this.exportData.description
+								description: this.exportData.description || ''
 							}
 						}
 					});
 					
+					console.log('云函数返回结果:', JSON.stringify(result.result));
+					
 					if (result.result.code === 0) {
 						// 下载导出的文件
 						const fileUrl = result.result.data.fileUrl;
+						console.log('获取到文件URL:', fileUrl);
 						
 						// 在浏览器环境下提示下载链接
 						// #ifdef H5
+						console.log('H5环境，打开新窗口下载');
 						window.open(fileUrl, '_blank');
 						// #endif
 						
 						// 在APP环境下下载文件
 						// #ifdef APP-PLUS
+						console.log('APP环境，开始下载文件');
 						uni.showToast({
 							title: '导出成功，正在下载...',
 							icon: 'none',
@@ -366,25 +376,30 @@
 						const downloadTask = uni.downloadFile({
 							url: fileUrl,
 							success: (res) => {
+								console.log('下载成功:', JSON.stringify(res));
 								if (res.statusCode === 200) {
 									uni.saveFile({
 										tempFilePath: res.tempFilePath,
 										success: (saveRes) => {
+											console.log('保存成功:', JSON.stringify(saveRes));
 											uni.openDocument({
 												filePath: saveRes.savedFilePath,
 												success: () => {
 													console.log('打开文档成功');
+												},
+												fail: (err) => {
+													console.error('打开文档失败:', JSON.stringify(err));
 												}
 											});
 										},
 										fail: (err) => {
-											console.error('保存文件失败:', err);
+											console.error('保存文件失败:', JSON.stringify(err));
 										}
 									});
 								}
 							},
 							fail: (err) => {
-								console.error('下载文件失败:', err);
+								console.error('下载文件失败:', JSON.stringify(err));
 							}
 						});
 						// #endif
@@ -392,7 +407,7 @@
 						this.hideExportPopup();
 					} else {
 						// 显示更详细的错误信息
-						console.error('导出失败:', result.result);
+						console.error('导出失败:', JSON.stringify(result.result));
 						uni.showModal({
 							title: '导出失败',
 							content: result.result.msg || '导出A类评分汇总表失败，请检查是否有符合条件的评分表',
@@ -400,7 +415,7 @@
 						});
 					}
 				} catch (e) {
-					console.error('导出A类评分汇总表失败:', e);
+					console.error('导出A类评分汇总表失败:', JSON.stringify(e));
 					uni.showToast({
 						title: '导出失败',
 						icon: 'none'

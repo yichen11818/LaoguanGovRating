@@ -1,29 +1,8 @@
 'use strict';
 // 导入模块
 console.log('开始导入node-xlsx模块...');
-let BuildClass;
-
-try {
-  // 导入node-xlsx模块
-  const xlsx = require('node-xlsx');
-  console.log('node-xlsx模块导入成功，类型:', typeof xlsx);
-  console.log('node-xlsx模块结构:', Object.keys(xlsx));
-  
-  // 获取正确的构造函数 - 文章中解释必须用new调用
-  BuildClass = xlsx.build || (xlsx.default && xlsx.default.build) || xlsx;
-  console.log('构造函数类型:', typeof BuildClass);
-  
-  // 必须使用new方式调用
-  if (typeof BuildClass !== 'function') {
-    console.error('无法找到可用的build构造函数');
-    throw new Error('无法找到可用的build构造函数');
-  } else {
-    console.log('已找到构造函数，将使用new关键字调用');
-  }
-} catch (importError) {
-  console.error('导入node-xlsx模块失败:', importError);
-  throw new Error('无法导入node-xlsx模块: ' + importError.message);
-}
+const xlsx = require('node-xlsx');
+console.log('node-xlsx模块导入成功，类型:', typeof xlsx);
 
 exports.main = async (event, context) => {
   const { action, data } = event;
@@ -52,6 +31,7 @@ async function exportATypeRatings(data) {
   
   try {
     console.log(`开始导出${year}年度${description ? '(' + description + ')' : ''}A类评分汇总表`);
+    console.log('导出参数:', JSON.stringify(data));
     
     // 参数校验
     if (!group_id || !year) {
@@ -62,30 +42,10 @@ async function exportATypeRatings(data) {
     }
     
     // 获取A类班子评分表和驻村工作评分表
-    // 添加详细日志
     console.log('开始查询A类评分表，参数:', { group_id, year });
     
-    // 先查询所有类型为1的表格，不加其他条件
-    const allTypeOneTablesResult = await ratingTableCollection.where({
-      type: 1 // A类评分表
-    }).get();
-    
-    console.log(`找到${allTypeOneTablesResult.data.length}个类型为1的表格`);
-    if (allTypeOneTablesResult.data.length > 0) {
-      console.log('表格示例:', JSON.stringify(allTypeOneTablesResult.data[0]));
-    }
-    
     // 查询指定group_id的表格
-    const groupTablesResult = await ratingTableCollection.where({
-      group_id
-    }).get();
-    
-    console.log(`找到${groupTablesResult.data.length}个属于group_id ${group_id}的表格`);
-    
-        // 获取command对象
-    const cmd = db.command;
-    
-    // 查询所有表格
+    console.log('开始查询所有表格，group_id:', group_id);
     const allTablesResult = await ratingTableCollection.where({
       group_id
     }).get();
@@ -106,6 +66,7 @@ async function exportATypeRatings(data) {
     let zhucunTable = null;
     
     // 遍历所有表格，查找班子和驻村评分表
+    console.log('开始查找班子评分表(type=1)和驻村评分表(type=2)');
     for (const table of allTablesResult.data) {
       // 检查是否为班子评分表
       if (!banziTable && table.type === 1) {
@@ -130,7 +91,7 @@ async function exportATypeRatings(data) {
       console.log('未找到班子评分表');
       return {
         code: -1,
-        msg: '未找到班子评分表，请创建一个名称或类别包含"班子"的评分表'
+        msg: '未找到班子评分表，请检查是否有type=1的评分表'
       };
     }
     
@@ -138,48 +99,46 @@ async function exportATypeRatings(data) {
       console.log('未找到驻村评分表');
       return {
         code: -1,
-        msg: '未找到驻村工作评分表，请创建一个名称或类别包含"驻村"的评分表'
+        msg: '未找到驻村工作评分表，请检查是否有type=2的评分表'
       };
     }
     
     console.log('找到必要的评分表，继续导出操作');
-    
-    // 我们已经找到了班子和驻村评分表，直接使用
-    console.log('使用班子评分表:', banziTable.name);
-    console.log('使用驻村评分表:', zhucunTable.name);
-    
-    if (!banziTable) {
-      return {
-        code: -1,
-        msg: '未找到班子评分表'
-      };
-    }
+    console.log('班子评分表:', JSON.stringify(banziTable));
+    console.log('驻村评分表:', JSON.stringify(zhucunTable));
     
     // 获取所有考核对象（以班子评分表为准）
+    console.log('开始获取考核对象, 班子评分表ID:', banziTable._id);
     const subjectsResult = await subjectCollection.where({
       table_id: db.command.all([banziTable._id])
     }).get();
     
     if (subjectsResult.data.length === 0) {
+      console.log('未找到考核对象');
       return {
         code: -1,
         msg: '未找到考核对象'
       };
     }
     
+    console.log(`找到${subjectsResult.data.length}个考核对象`);
     const subjects = subjectsResult.data;
     
     // 获取班子评分表的所有评分记录
+    console.log('获取班子评分记录, 班子评分表ID:', banziTable._id);
     const banziRatingsResult = await ratingCollection.where({
       table_id: banziTable._id
     }).get();
+    console.log(`找到${banziRatingsResult.data.length}条班子评分记录`);
     
     // 获取驻村工作评分表的所有评分记录（如果有）
     let zhucunRatingsResult = { data: [] };
     if (zhucunTable) {
+      console.log('获取驻村评分记录, 驻村评分表ID:', zhucunTable._id);
       zhucunRatingsResult = await ratingCollection.where({
         table_id: zhucunTable._id
       }).get();
+      console.log(`找到${zhucunRatingsResult.data.length}条驻村评分记录`);
     }
     
     // 构建评分数据，按照考核对象进行整合
@@ -401,7 +360,7 @@ async function exportATypeRatings(data) {
       worksheetData.push(row);
     }
     
-    // 生成Excel文件
+    // 设置列宽
     const options = {
       '!cols': [
         { wch: 5 }, // 序号
@@ -428,171 +387,48 @@ async function exportATypeRatings(data) {
     options['!cols'].push({ wch: 30 }); // 总分
     options['!cols'].push({ wch: 15 }); // 备注
     
-    // 调试日志
+    // 使用node-xlsx构建Excel文件
     console.log('准备构建Excel文件...');
-    console.log('BuildClass类型:', typeof BuildClass);
-    console.log('options:', JSON.stringify(options));
-    
-    // 使用new关键字调用构造函数
-    let buffer;
-    let csvMode = false; // 标记是否使用CSV模式
     try {
-      console.log('使用new关键字调用构造函数...');
-      // 使用new关键字调用构造函数
-      buffer = new BuildClass([{
+      const buffer = xlsx.build([{
         name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
         data: worksheetData
       }], options);
-      console.log('Excel构建成功，buffer类型:', typeof buffer);
-    } catch (buildError) {
-      console.error('使用BuildClass构造函数失败:', buildError);
+      console.log('Excel文件构建成功，准备上传');
       
-      // 尝试其他方式
-      console.log('尝试使用其他方式创建Excel...');
-      try {
-        const xlsxModule = require('node-xlsx');
-        console.log('重新导入的xlsxModule类型:', typeof xlsxModule);
-        console.log('xlsxModule结构:', Object.keys(xlsxModule));
-        
-        let success = false;
-        
-        // 方法1：尝试使用build作为构造函数（使用new关键字）
-        if (!success && typeof xlsxModule.build === 'function') {
-          try {
-            console.log('方法1: 使用new xlsxModule.build方式');
-            const BuildXlsx = xlsxModule.build;
-            buffer = new BuildXlsx([{
-              name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
-              data: worksheetData
-            }], options);
-            console.log('方法1成功');
-            success = true;
-          } catch (err1) {
-            console.log('方法1失败:', err1.message);
-          }
+      // 将Excel文件上传到云存储
+      const fileExtension = '.xlsx';
+      console.log('开始上传文件到云存储');
+      const uploadResult = await uniCloud.uploadFile({
+        cloudPath: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}-${Date.now()}${fileExtension}`,
+        fileContent: buffer
+      });
+      
+      console.log('文件上传成功，fileID:', uploadResult.fileID);
+      
+      // 生成临时下载链接
+      console.log('开始获取临时下载链接');
+      const fileUrl = await uniCloud.getTempFileURL({
+        fileList: [uploadResult.fileID]
+      });
+      
+      console.log('获取临时下载链接成功:', fileUrl.fileList[0].tempFileURL);
+      
+      return {
+        code: 0,
+        msg: '导出成功',
+        data: {
+          fileUrl: fileUrl.fileList[0].tempFileURL
         }
-        
-        // 方法2：使用默认导出的build方法作为构造函数
-        if (!success && xlsxModule.default && typeof xlsxModule.default.build === 'function') {
-          try {
-            console.log('方法2: 使用new xlsxModule.default.build方式');
-            const BuildXlsx = xlsxModule.default.build;
-            buffer = new BuildXlsx([{
-              name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
-              data: worksheetData
-            }], options);
-            console.log('方法2成功');
-            success = true;
-          } catch (err2) {
-            console.log('方法2失败:', err2.message);
-          }
-        }
-        
-        // 方法3：尝试使用xlsxModule本身作为构造函数
-        if (!success && typeof xlsxModule === 'function') {
-          try {
-            console.log('方法3: 尝试使用new xlsxModule()方式');
-            buffer = new xlsxModule([{
-              name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
-              data: worksheetData
-            }], options);
-            console.log('方法3成功');
-            success = true;
-          } catch (err3) {
-            console.log('方法3失败:', err3.message);
-          }
-        }
-        
-        // 方法4：尝试使用xlsxModule.default作为构造函数
-        if (!success && xlsxModule.default && typeof xlsxModule.default === 'function') {
-          try {
-            console.log('方法4: 尝试使用new xlsxModule.default()方式');
-            buffer = new xlsxModule.default([{
-              name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
-              data: worksheetData
-            }], options);
-            console.log('方法4成功');
-            success = true;
-          } catch (err4) {
-            console.log('方法4失败:', err4.message);
-          }
-        }
-        
-        // 方法5：使用node-xlsx的原始API
-        if (!success) {
-          try {
-            console.log('方法5: 尝试使用node-xlsx原始API');
-            const nodeXlsx = require('node-xlsx');
-            const worksheets = [{
-              name: `A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}`,
-              data: worksheetData,
-              options: options
-            }];
-            
-            if (typeof nodeXlsx.parse === 'function') {
-              console.log('尝试使用parseFile和build组合方式');
-              // 尝试临时创建文件并解析
-              buffer = require('node-xlsx').build(worksheets);
-              console.log('方法5成功');
-              success = true;
-            }
-          } catch (err5) {
-            console.log('方法5失败:', err5.message);
-          }
-        }
-        
-        // 方法6：最后的尝试 - 创建兼容的简易版Excel（CSV格式）
-        if (!success) {
-          try {
-            console.log('方法6: 创建简易CSV格式作为备选');
-            // 生成CSV格式（可以被Excel打开）
-            let csvContent = '';
-            
-            // 添加数据
-            for (const row of worksheetData) {
-              csvContent += row.map(cell => {
-                // 处理单元格内容，添加引号，处理逗号和引号
-                if (cell === null || cell === undefined) return '""';
-                return `"${String(cell).replace(/"/g, '""')}"`;
-              }).join(',') + '\n';
-            }
-            
-            // 转为Buffer
-            buffer = Buffer.from(csvContent);
-            console.log('方法6成功 (使用CSV格式)');
-            success = true;
-            csvMode = true; // 标记使用了CSV模式
-          } catch (err6) {
-            console.log('方法6失败:', err6.message);
-            throw new Error('所有尝试方法都失败，无法生成Excel或CSV格式');
-          }
-        }
-      } catch (thirdError) {
-        console.error('所有尝试都失败:', thirdError);
-        throw new Error('无法构建Excel文件: ' + thirdError.message);
-      }
+      };
+    } catch (excelError) {
+      console.error('构建或上传Excel文件失败:', excelError);
+      return {
+        code: -1,
+        msg: '构建Excel文件失败: ' + excelError.message,
+        error: excelError.message
+      };
     }
-    
-    // 将Excel文件上传到云存储
-    // 根据生成方法确定文件后缀
-    const fileExtension = csvMode ? '.csv' : '.xlsx';
-    const uploadResult = await uniCloud.uploadFile({
-      cloudPath: `exports/A类评分汇总表-${year}年${description ? '(' + description + ')' : ''}-${Date.now()}${fileExtension}`,
-      fileContent: buffer
-    });
-    
-    // 生成临时下载链接
-    const fileUrl = await uniCloud.getTempFileURL({
-      fileList: [uploadResult.fileID]
-    });
-    
-    return {
-      code: 0,
-      msg: '导出成功',
-      data: {
-        fileUrl: fileUrl.fileList[0].tempFileURL
-      }
-    };
     
   } catch (e) {
     console.error('导出A类评分汇总表失败:', e);
@@ -602,4 +438,4 @@ async function exportATypeRatings(data) {
       error: e.message
     };
   }
-} 
+}
