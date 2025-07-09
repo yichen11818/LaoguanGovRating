@@ -11,6 +11,10 @@
 						</view>
 					</picker>
 				</view>
+				
+				<view class="action-buttons">
+					<button type="primary" size="mini" @click="goToPreviewPage">查看导出预览</button>
+				</view>
 			</view>
 		</view>
 		
@@ -292,6 +296,22 @@
 			// 关闭评分详情弹窗
 			closeScoreDetail() {
 				this.$refs.scoreDetailPopup.close();
+			},
+			
+			// 跳转到评分表预览页面
+			goToPreviewPage() {
+				if (!this.selectedGroup) {
+					uni.showToast({
+						title: '请先选择年份组',
+						icon: 'none'
+					});
+					return;
+				}
+				
+				// 跳转到预览页面，并传递选中的年份组信息
+				uni.navigateTo({
+					url: `/pages/admin/ratings/ratings-preview?group_id=${this.selectedGroup._id}&year=${this.selectedGroup.year}&description=${this.selectedGroup.description || ''}`
+				});
 			}
 		}
 	}
@@ -318,9 +338,15 @@
 		flex-wrap: wrap;
 		gap: 20rpx;
 		margin-bottom: 20rpx;
+		justify-content: space-between;
 	}
 	
 	.filter-item {
+		display: flex;
+		align-items: center;
+	}
+	
+	.action-buttons {
 		display: flex;
 		align-items: center;
 	}

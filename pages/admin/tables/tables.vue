@@ -2,9 +2,6 @@
 	<view class="container">
 		<view class="filter-bar">
 			<view class="filter-item" v-if="yearFilter">
-				<button class="back-btn" @click="goBackToYears">
-					<text>返回年份</text>
-				</button>
 			</view>
 			<view class="filter-item">
 				<picker @change="handleTypeChange" :value="currentTypeIndex" :range="typeOptions" range-key="name">
@@ -12,6 +9,23 @@
 						<text class="picker-text">{{typeOptions[currentTypeIndex].name}}</text>
 					</view>
 				</picker>
+			</view>
+			
+			<!-- 添加搜索框 -->
+			<view class="search-container">
+				<input 
+					v-model="searchKeyword" 
+					class="search-input" 
+					placeholder="搜索评分人或考核对象" 
+					confirm-type="search" 
+					@confirm="handleSearch"
+				/>
+				<view class="search-btn" @click="handleSearch">
+					<text class="search-icon">搜</text>
+				</view>
+				<view v-if="searchKeyword" class="clear-btn" @click="clearSearch">
+					<text class="clear-icon">清除</text>
+				</view>
 			</view>
 			
 			<button class="add-btn" @click="showAddTableModal">
@@ -63,7 +77,7 @@
 					<text class="subject-title">考核对象：</text>
 					<view class="subjects-list">
 						<view class="subject-item" v-for="(subject, sidx) in table.subjects" :key="sidx">
-							<text class="subject-name">{{subject.name}}</text>
+							<text class="subject-name">{{subject.name}}{{subject.position ? (' (' + subject.position + ')') : ''}}</text>
 							<text class="subject-score" v-if="subject.score !== undefined">{{subject.score}}分</text>
 						</view>
 					</view>
@@ -136,7 +150,7 @@
 						<view class="selected-subjects">
 							<view v-if="formData.selectedSubjects && formData.selectedSubjects.length > 0">
 								<view class="selected-subject" v-for="(subject, index) in formData.selectedSubjects" :key="subject._id || index">
-									<text>{{subject.name}}</text>
+									<text>{{subject.name}}{{subject.position ? (' (' + subject.position + ')') : ''}}</text>
 									<text class="remove-subject" @click="removeSelectedSubject(index)">×</text>
 								</view>
 							</view>
@@ -210,7 +224,7 @@
 						<view class="selected-subjects">
 							<view v-if="editData.selectedSubjects && editData.selectedSubjects.length > 0">
 								<view class="selected-subject" v-for="(subject, index) in editData.selectedSubjects" :key="subject._id || index">
-									<text>{{subject.name}}</text>
+									<text>{{subject.name}}{{subject.position ? (' (' + subject.position + ')') : ''}}</text>
 									<text class="remove-subject" @click="removeEditSubject(index)">×</text>
 								</view>
 							</view>
@@ -302,9 +316,8 @@
 						  @click="toggleSubjectSelection(subject)"
 						  :class="{'subject-item-selected': isSubjectSelected(subject)}">
 						<view class="subject-info">
-							<text class="subject-name">{{subject.name}}</text>
+							<text class="subject-name">{{subject.name}} <text class="subject-position-highlight" v-if="subject.position">({{subject.position}})</text></text>
 							<text class="subject-department" v-if="subject.department">{{subject.department}}</text>
-							<text class="subject-position" v-if="subject.position">{{subject.position}}</text>
 							<text class="selected-tag" v-if="isSubjectSelected(subject)">已选</text>
 						</view>
 					</view>
@@ -471,7 +484,10 @@
 				selectingMode: '', // 评分人选择器的模式: 'add'新增表单, 'edit'编辑表单
 				currentSubjectTab: 0, // 当前选中的选项卡索引
 				yearFilter: '', // 添加年份筛选参数
-				groupId: '' // 添加表格组ID
+				groupId: '', // 添加表格组ID
+				
+				// 添加搜索关键词
+				searchKeyword: '',
 			}
 		},
 		onLoad(options) {
@@ -507,10 +523,12 @@
 			
 			// 先加载评分人列表，然后再加载表格数据
 			this.loadRaters().then(() => {
-				this.loadTables();
+				// 使用loadData代替loadTables，以支持搜索功能
+				this.loadData();
 			}).catch(err => {
 				console.error('加载评分人列表失败:', err);
-				this.loadTables(); // 即使加载评分人失败，也加载表格
+				// 即使加载评分人失败，也加载表格
+				this.loadData(); 
 			});
 			
 			// 在组件初始化时，延迟加载考核对象，避免与表格数据加载冲突
@@ -542,8 +560,8 @@
 			this.currentPage = 1;
 			this.hasMoreData = true;
 			
-			// 调用loadTables而不是loadData，确保使用正确的年份参数
-			this.loadTables();
+			// 调用loadData而不是loadTables，确保使用正确的年份参数并支持搜索功能
+			this.loadData();
 			this.loadRaters();
 		},
 		computed: {
@@ -631,7 +649,7 @@
 				this.currentTypeIndex = e.detail.value;
 				this.page = 1;
 				this.tables = [];
-				this.loadTables();
+				this.loadData();
 			},
 			
 			// 加载评分表
@@ -771,14 +789,14 @@
 				});
 			},
 			
-			// 修改loadData方法，增加对年份的筛选
+			// 修改loadData方法，增加对搜索关键词的处理
 			loadData() {
 				if (this.isLoading) return;
 				this.isLoading = true;
 				
 				const typeValue = this.typeOptions[this.currentTypeIndex].id;
 				
-				// 使用新的getTableSubjectAndScore函数
+				// 使用getTableSubjectAndScore函数
 				uniCloud.callFunction({
 					name: 'ratingTable',
 					data: {
@@ -787,7 +805,7 @@
 							type: typeValue > 0 ? typeValue : undefined,
 							page: this.page,
 							pageSize: this.pageSize,
-							keyword: this.searchKeyword,
+							keyword: this.searchKeyword, // 添加关键词参数
 							year: this.yearFilter || '', // 确保传递年份参数
 							group_id: this.groupId || '' // 传递表格组ID
 						}
@@ -813,35 +831,18 @@
 								// 处理评分数据，将分数添加到考核对象
 								if (data.ratings && data.ratings[table._id]) {
 									const tableRatings = data.ratings[table._id];
-									// 调试日志：查看评分数据结构
-									console.log(`表格${table._id}的评分数据:`, tableRatings);
 									
 									// 将评分添加到对应的考核对象
 									table.subjects.forEach(subject => {
-										// 调试日志：查看当前考核对象
-										console.log(`处理考核对象:`, {
-											_id: subject._id,
-											name: subject.name,
-											department: subject.department
-										});
-										
 										// 使用考核对象的名称匹配ratings表中的subject字段
 										const subjectRating = tableRatings.find(r => {
-											// 详细输出匹配过程
 											const idMatch = r.subject === subject._id;
 											const nameMatch = r.subject === subject.name;
-											console.log(`尝试匹配: rating.subject=${r.subject}, subject.name=${subject.name}, subject._id=${subject._id}, idMatch=${idMatch}, nameMatch=${nameMatch}`);
 											return nameMatch || idMatch;
 										});
 										
 										if (subjectRating) {
-											console.log(`找到匹配的评分数据:`, {
-												subject: subjectRating.subject,
-												score: subjectRating.total_score
-											});
 											subject.score = subjectRating.total_score || 0;
-										} else {
-											console.log(`未找到匹配的评分数据`);
 										}
 									});
 								}
@@ -856,17 +857,12 @@
 						
 						this.hasMoreData = Array.isArray(tables) && tables.length === this.pageSize;
 						
-						// 打印第一个表格的评分人和考核对象信息（用于调试）
-						if (this.tables.length > 0) {
-							const firstTable = this.tables[0];
-							console.log('第一个表格评分人:', {
-								rater: firstTable.rater,
-								displayName: this.getRaterName(firstTable.rater)
+						// 如果有搜索关键词且结果为空，显示提示
+						if (this.searchKeyword && this.tables.length === 0) {
+							uni.showToast({
+								title: '未找到匹配的评分表',
+								icon: 'none'
 							});
-							
-							if (firstTable.subjects && firstTable.subjects.length > 0) {
-								console.log('第一个表格考核对象:', firstTable.subjects.length, '个');
-							}
 						}
 					} else {
 						uni.showToast({
@@ -1031,7 +1027,8 @@
 						
 						this.hideAddTablePopup();
 						this.page = 1;
-						this.loadTables();
+						// 使用loadData替代loadTables
+						this.loadData();
 					} else {
 						uni.showToast({
 							title: res.result.msg || '创建失败',
@@ -1164,7 +1161,8 @@
 						
 						this.hideEditTablePopup();
 						this.page = 1;
-						this.loadTables();
+						// 使用loadData替代loadTables
+						this.loadData();
 					} else {
 						uni.showToast({
 							title: res.result.msg || '更新失败',
@@ -1297,8 +1295,8 @@
 						
 						// 更新列表
 						this.tables = this.tables.filter(item => item._id !== tableId);
-						if (this.tables.length === 0 && this.currentPage > 1) {
-							this.currentPage--;
+						if (this.tables.length === 0 && this.page > 1) {
+							this.page--;
 							this.loadData();
 						}
 					} else {
@@ -1881,12 +1879,13 @@
 			getSubjectNameById(id) {
 				// 优先从已选Map中获取，确保能够获取到已选但不在当前搜索结果中的对象
 				if (this.selectedSubjectsMap[id]) {
-					return this.selectedSubjectsMap[id].name;
+					const subject = this.selectedSubjectsMap[id];
+					return subject.position ? `${subject.name} (${subject.position})` : subject.name;
 				}
 				
 				// 如果Map中没有，则从当前搜索结果中查找
 				const subject = this.allSubjects.find(s => s._id === id);
-				return subject ? subject.name : '';
+				return subject ? (subject.position ? `${subject.name} (${subject.position})` : subject.name) : '';
 			},
 			
 			// 切换选项卡
@@ -1970,7 +1969,21 @@
 				});
 			},
 			
-
+			// 处理搜索请求
+			handleSearch() {
+				console.log('执行搜索，关键词:', this.searchKeyword);
+				this.page = 1; // 重置页码
+				this.tables = []; // 清空当前列表
+				this.loadData(); // 重新加载数据
+			},
+			
+			// 清除搜索
+			clearSearch() {
+				this.searchKeyword = '';
+				this.page = 1;
+				this.tables = [];
+				this.loadData();
+			},
 		}
 	}
 </script>
@@ -2025,9 +2038,8 @@ page {
 }
 
 .filter-item {
-	flex: 1;
-	margin-bottom: 0;
-	text-align: left;
+	flex: 0 0 auto;
+	margin-right: 15rpx;
 }
 
 .picker-box {
@@ -2901,5 +2913,60 @@ page {
 	color: #1890ff;
 	font-weight: 500;
 	margin-left: 3px;
+}
+
+/* 添加搜索框样式 */
+.search-container {
+	display: flex;
+	align-items: center;
+	flex: 2;
+	margin: 0 16rpx;
+}
+
+.search-input {
+	height: 70rpx;
+	flex: 1;
+	background-color: #f5f7fa;
+	border-radius: var(--btn-radius);
+	padding: 0 20rpx;
+	font-size: 28rpx;
+	border: 1px solid var(--border-color);
+}
+
+.search-btn {
+	width: 70rpx;
+	height: 70rpx;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: var(--primary-color);
+	color: white;
+	border-radius: var(--btn-radius);
+	margin-left: 10rpx;
+}
+
+.search-icon {
+	font-size: 28rpx;
+}
+
+.clear-btn {
+	padding: 0 20rpx;
+	height: 70rpx;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: #f2f2f2;
+	color: #666;
+	border-radius: var(--btn-radius);
+	margin-left: 10rpx;
+}
+
+.clear-icon {
+	font-size: 26rpx;
+}
+
+.subject-position-highlight {
+	color: #ff9900;
+	font-weight: bold;
 }
 </style> 

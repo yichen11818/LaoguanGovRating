@@ -73,6 +73,7 @@
 						</picker>
 					</view>
 					<view class="popup-btns">
+						<button class="preview-btn" size="mini" @click="previewExport">预览</button>
 						<button class="cancel-btn" size="mini" @click="hideExportPopup">取消</button>
 						<button class="confirm-btn" size="mini" @click="confirmExport">确定</button>
 					</view>
@@ -691,6 +692,63 @@
 				uni.navigateTo({
 					url: '/pages/admin/ratings/ratings-detail'
 				});
+			},
+			
+			// 预览导出评分表
+			async previewExport() {
+				if (!this.exportData.year) {
+					uni.showToast({
+						title: '请选择年度',
+						icon: 'none'
+					});
+					return;
+				}
+				
+				// 如果是A类导出，先检查是否有A类评分表
+				if (this.exportData.exportType === 'A') {
+					const checkResult = await this.checkATypeRatings();
+					
+					if (checkResult.success) {
+						if (!checkResult.hasATypeRatings) {
+							let message = `未找到${this.exportData.year}年度的A类评分表，`;
+							if (!checkResult.hasBanziTable && !checkResult.hasZhucunTable) {
+								message += '请先创建班子评分表和驻村工作评分表';
+							} else if (!checkResult.hasBanziTable) {
+								message += '请先创建班子评分表';
+							} else if (!checkResult.hasZhucunTable) {
+								message += '请先创建驻村工作评分表';
+							}
+							
+							uni.showModal({
+								title: '提示',
+								content: message,
+								showCancel: false
+							});
+							return;
+						}
+						
+						// 隐藏导出弹窗
+						this.hideExportPopup();
+						
+						// 跳转到预览页面
+						uni.navigateTo({
+							url: `/pages/admin/ratings/ratings-preview?group_id=${this.exportData.group_id}&year=${this.exportData.year}&description=${this.exportData.description || ''}`
+						});
+					} else {
+						// 检查失败
+						uni.showModal({
+							title: '预览失败',
+							content: checkResult.error || '检查评分表失败',
+							showCancel: false
+						});
+					}
+				} else {
+					// B类评分预览 - 目前没有实现B类预览
+					uni.showToast({
+						title: 'B类评分预览功能暂未实现',
+						icon: 'none'
+					});
+				}
 			}
 		}
 	}
@@ -726,6 +784,12 @@
 	
 	.export-btn {
 		background-color: #0A8D2E;
+	}
+	
+	.preview-btn {
+		background-color: #5856D6;
+		color: #FFFFFF;
+		margin-right: 10rpx;
 	}
 	
 	.export-btn.b-type {
@@ -859,6 +923,24 @@
 		display: flex;
 		justify-content: space-between;
 		margin-top: 30rpx;
+		width: 100%;
+		color: #FFFFFF;
+		margin-left: 10rpx;
+	}
+	
+	.cancel-btn, .confirm-btn, .preview-btn {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		height: 70rpx;
+		border-radius: 8rpx;
+		font-size: 28rpx;
+	}
+	
+	.popup-btns {
+		display: flex;
+		flex-direction: row;
+		justify-content: space-between;
 	}
 	
 	.cancel-btn {
@@ -906,4 +988,5 @@
 		font-size: 24rpx;
 		color: #666666;
 	}
+
 </style> 
