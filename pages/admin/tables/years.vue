@@ -26,6 +26,9 @@
 					<text class="group-desc" v-if="year.description">{{year.description}}</text>
 					
 					<view class="year-actions">
+						<button class="action-btn delete-group" @click.stop="confirmDeleteGroup(year)">
+							<text>删除</text>
+						</button>
 						<button class="action-btn add-table" @click.stop="createTableInGroup(year)">
 							<text>新增表格</text>
 						</button>
@@ -53,6 +56,21 @@
 				<view class="popup-btns">
 					<button class="cancel-btn" size="mini" @click="hideAddGroupPopup">取消</button>
 					<button class="confirm-btn" size="mini" @click="submitAddGroup">确定</button>
+				</view>
+			</view>
+		</uni-popup>
+		
+		<!-- 删除确认弹窗 -->
+		<uni-popup ref="deleteConfirmPopup" type="center">
+			<view class="popup-content">
+				<view class="popup-title">确认删除</view>
+				<view class="popup-message">
+					<text>确定要删除"{{deleteGroupData.year}}年{{deleteGroupData.description ? ' (' + deleteGroupData.description + ')' : ''}}"表格组吗？</text>
+					<text class="warning-text">删除后将无法恢复，该组下的所有表格也将被删除！</text>
+				</view>
+				<view class="popup-btns">
+					<button class="cancel-btn" size="mini" @click="hideDeleteConfirmPopup">取消</button>
+					<button class="confirm-btn delete-btn" size="mini" @click="submitDeleteGroup">确定删除</button>
 				</view>
 			</view>
 		</uni-popup>
@@ -123,6 +141,13 @@
 					message: '',
 					status: '',
 					result: null
+				},
+				// 删除表格组数据
+				deleteGroupData: {
+					_id: '',
+					year: '',
+					description: '',
+					tableCount: 0
 				}
 			}
 		},
@@ -749,6 +774,78 @@
 						icon: 'none'
 					});
 				}
+			},
+			
+			// 显示删除表格组确认弹窗
+			confirmDeleteGroup(group) {
+				this.deleteGroupData = {
+					_id: group._id,
+					year: group.year,
+					description: group.description || '',
+					tableCount: group.tableCount || 0
+				};
+				this.$refs.deleteConfirmPopup.open();
+			},
+			
+			// 隐藏删除表格组确认弹窗
+			hideDeleteConfirmPopup() {
+				this.$refs.deleteConfirmPopup.close();
+			},
+			
+			// 提交删除表格组
+			async submitDeleteGroup() {
+				if (!this.deleteGroupData._id) {
+					uni.showToast({
+						title: '删除失败，无效的表格组ID',
+						icon: 'none'
+					});
+					return;
+				}
+				
+				try {
+					uni.showLoading({
+						title: '正在删除...',
+						mask: true
+					});
+					
+					const result = await uniCloud.callFunction({
+						name: 'ratingTable',
+						data: {
+							action: 'deleteGroup',
+							data: {
+								id: this.deleteGroupData._id
+							}
+						}
+					});
+					
+					uni.hideLoading();
+					
+					if (result.result.code === 0) {
+						uni.showToast({
+							title: '删除成功',
+							icon: 'success'
+						});
+						
+						this.hideDeleteConfirmPopup();
+						
+						// 重新加载数据
+						await this.loadData();
+					} else {
+						uni.showModal({
+							title: '删除失败',
+							content: result.result.msg || '删除表格组失败',
+							showCancel: false
+						});
+					}
+				} catch (e) {
+					uni.hideLoading();
+					console.error('删除表格组失败:', e);
+					uni.showModal({
+						title: '删除失败',
+						content: '系统错误，请稍后再试',
+						showCancel: false
+					});
+				}
 			}
 		}
 	}
@@ -987,6 +1084,31 @@
 	.progress-text {
 		font-size: 24rpx;
 		color: #666666;
+	}
+
+	.action-btn.delete-group {
+		background-color: rgba(255, 63, 63, 0.2);
+		border-color: #FF3F3F;
+		margin-right: 10rpx;
+	}
+	
+	.popup-message {
+		text-align: center;
+		margin-bottom: 20rpx;
+		font-size: 28rpx;
+		line-height: 1.5;
+		display: flex;
+		flex-direction: column;
+	}
+	
+	.warning-text {
+		color: #FF3B30;
+		font-size: 24rpx;
+		margin-top: 10rpx;
+	}
+
+	.confirm-btn.delete-btn {
+		background-color: #FF3B30;
 	}
 
 </style> 

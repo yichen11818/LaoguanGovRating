@@ -15,7 +15,7 @@
 		
 		<view class="item-list">
 			<view class="no-data" v-if="table.items && table.items.length === 0">
-				<image class="no-data-icon" src="/static/images/no-data.png" mode="aspectFit"></image>
+				<image class="no-data-icon"  mode="aspectFit"></image>
 				<text class="no-data-text">暂无评分项，请添加</text>
 			</view>
 			

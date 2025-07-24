@@ -10,6 +10,19 @@
 				</picker>
 			</view>
 			
+			<!-- 添加搜索框 -->
+			<view class="search-box">
+				<input 
+					class="search-input" 
+					v-model="searchKeyword" 
+					placeholder="搜索姓名/部门" 
+					confirm-type="search"
+					@confirm="handleSearch"
+				/>
+				<text class="search-btn" @click="handleSearch">搜索</text>
+				<text v-if="searchKeyword" class="clear-btn" @click="clearSearch">×</text>
+			</view>
+			
 			<view class="action-btns">
 				<button class="add-btn" size="mini" @click="showAddSubjectModal">新增考核对象</button>
 			</view>
@@ -17,7 +30,7 @@
 		
 		<view class="subject-list">
 			<view class="no-data" v-if="subjects.length === 0">
-				<image class="no-data-icon" src="/static/images/no-data.png" mode="aspectFit"></image>
+				<image class="no-data-icon"   mode="aspectFit"></image>
 				<text class="no-data-text">暂无考核对象</text>
 			</view>
 			
@@ -155,6 +168,7 @@
 				total: 0,
 				hasMoreData: false,
 				isLoading: false,
+				searchKeyword: '', // 添加搜索关键词字段
 				
 				// 表单数据
 				formData: {
@@ -180,7 +194,7 @@
 					addSubject: false,
 					editSubject: false
 				}
-			}
+			};
 		},
 		onLoad() {
 			this.loadTables();
@@ -246,7 +260,8 @@
 						data: {
 							table_id: tableId || undefined, // 如果是全部评分表，则不传tableId
 							page: this.page,
-							pageSize: this.pageSize
+							pageSize: this.pageSize,
+							keyword: this.searchKeyword || undefined // 添加搜索关键词
 						}
 					}
 				}).then(res => {
@@ -284,6 +299,21 @@
 				if (this.isLoading || !this.hasMoreData) return;
 				
 				this.page++;
+				this.loadSubjects();
+			},
+			
+			// 处理搜索
+			handleSearch() {
+				this.page = 1;
+				this.subjects = [];
+				this.loadSubjects();
+			},
+			
+			// 清空搜索
+			clearSearch() {
+				this.searchKeyword = '';
+				this.page = 1;
+				this.subjects = [];
 				this.loadSubjects();
 			},
 			
@@ -562,7 +592,7 @@
 				this.editData.position = e.detail.value;
 			}
 		}
-	}
+	};
 </script>
 
 <style>
@@ -572,14 +602,59 @@
 	
 	.filter-bar {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: center;
 		margin-bottom: 20rpx;
 	}
 	
 	.filter-item {
-		flex: 1;
+		flex: 0 0 auto;
 		margin-right: 20rpx;
+		margin-bottom: 15rpx;
+		width: 200rpx;
+	}
+	
+	/* 搜索框样式 */
+	.search-box {
+		flex: 1;
+		min-width: 250rpx;
+		position: relative;
+		display: flex;
+		margin-right: 20rpx;
+		margin-bottom: 15rpx;
+	}
+	
+	.search-input {
+		flex: 1;
+		height: 70rpx;
+		background-color: #f5f5f5;
+		border-radius: 35rpx;
+		padding: 0 100rpx 0 30rpx;
+		font-size: 28rpx;
+	}
+	
+	.search-btn {
+		position: absolute;
+		right: 20rpx;
+		top: 50%;
+		transform: translateY(-50%);
+		color: #007AFF;
+		font-size: 28rpx;
+		padding: 10rpx 15rpx;
+	}
+	
+	.clear-btn {
+		position: absolute;
+		right: 90rpx;
+		top: 50%;
+		transform: translateY(-50%);
+		color: #999;
+		font-size: 32rpx;
+		width: 40rpx;
+		height: 40rpx;
+		line-height: 40rpx;
+		text-align: center;
 	}
 	
 	.picker-box {
@@ -589,25 +664,60 @@
 		padding: 10rpx 20rpx;
 		background-color: #f5f5f5;
 		border-radius: 8rpx;
+		height: 70rpx; /* 匹配搜索框高度 */
+		width: 100%;
+		box-sizing: border-box;
 	}
 	
 	.picker-text {
 		font-size: 28rpx;
 		color: #333;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 150rpx;
 	}
 	
 	.picker-arrow {
 		font-size: 24rpx;
 		color: #999;
+		margin-left: 10rpx;
 	}
 	
 	.action-btns {
 		display: flex;
+		margin-bottom: 15rpx;
 	}
 	
 	.add-btn {
 		background-color: #007AFF;
 		color: #fff;
+		height: 70rpx; /* 匹配搜索框高度 */
+		line-height: 70rpx;
+		white-space: nowrap;
+	}
+	
+	/* 小屏幕适配 */
+	@media screen and (max-width: 500px) {
+		.filter-bar {
+			flex-direction: column;
+			align-items: stretch;
+		}
+		
+		.filter-item {
+			width: 100%;
+			margin-right: 0;
+		}
+		
+		.search-box {
+			width: 100%;
+			margin-right: 0;
+		}
+		
+		.action-btns {
+			width: 100%;
+			justify-content: flex-end;
+		}
 	}
 	
 	.subject-list {
