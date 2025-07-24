@@ -1,24 +1,52 @@
 <template>
 	<view class="container">
 		<view class="filter-bar">
-			<view class="filter-item">
-				<picker @change="handleRoleChange" :value="currentRoleIndex" :range="roleOptions" range-key="name">
-					<view class="picker-box">
-						<text class="picker-text">{{roleOptions[currentRoleIndex].name}}</text>
-						<text class="picker-arrow">▼</text>
-					</view>
-				</picker>
+			<view class="filter-top">
+				<view class="search-box">
+					<text class="search-icon">🔍</text>
+					<input 
+						type="text" 
+						v-model="searchKeyword" 
+						placeholder="搜索用户名或姓名" 
+						confirm-type="search" 
+						@confirm="handleSearch"
+						class="search-input"
+						@input="handleKeywordInput"
+					/>
+					<text v-if="searchKeyword" class="clear-icon" @click="clearSearch">×</text>
+				</view>
+				
+				<button class="add-btn" size="mini" @click="showAddUserModal">新增用户</button>
 			</view>
 			
-			<view class="action-btns">
-				<button class="add-btn" size="mini" @click="showAddUserModal">新增用户</button>
+			<view class="filter-bottom">
+				<view class="filter-item">
+					<picker @change="handleRoleChange" :value="currentRoleIndex" :range="roleOptions" range-key="name">
+						<view class="picker-box">
+							<text class="picker-text">{{roleOptions[currentRoleIndex].name}}</text>
+							<text class="picker-arrow">▼</text>
+						</view>
+					</picker>
+				</view>
 			</view>
 		</view>
 		
 		<view class="user-list">
-			<view class="no-data" v-if="users.length === 0">
+			<view class="search-hint" v-if="searchKeyword && users.length > 0">
+				<text class="hint-text">搜索"{{searchKeyword}}"，找到 {{total}} 个结果</text>
+			</view>
+			
+			<view class="loading-box" v-if="isLoading && page === 1">
+				<view class="loader"></view>
+				<text class="loading-text">加载中...</text>
+			</view>
+			
+			<view class="no-data" v-else-if="users.length === 0">
 				<image class="no-data-icon" src="/static/images/no-data.png" mode="aspectFit"></image>
-				<text class="no-data-text">暂无用户</text>
+				<text class="no-data-text">{{ searchKeyword ? '未找到匹配的用户，请尝试其他关键词' : '暂无用户' }}</text>
+				<view class="no-data-actions" v-if="searchKeyword">
+					<button class="clear-search-btn" @click="clearSearch">清空搜索</button>
+				</view>
 			</view>
 			
 			<view class="user-item" v-for="(user, index) in users" :key="index">
@@ -197,6 +225,10 @@
 				currentUser: {},  // 改为空对象而非null
 				newPassword: '',
 				
+				// 搜索相关
+				searchKeyword: '',
+				searchTimer: null, // 用于防抖
+				
 				// 弹窗显示状态
 				popupVisible: {
 					addUser: false,
@@ -234,11 +266,37 @@
 				this.loadUsers();
 			},
 			
+			// 处理搜索关键词输入
+			handleKeywordInput(e) {
+				this.searchKeyword = e.detail.value;
+				// 添加防抖，避免频繁搜索
+				clearTimeout(this.searchTimer);
+				this.searchTimer = setTimeout(() => {
+					this.page = 1;
+					this.loadUsers();
+				}, 500); // 500ms延迟，用户输入停止后再搜索
+			},
+
+			// 处理搜索
+			handleSearch() {
+				clearTimeout(this.searchTimer);
+				this.page = 1;
+				this.loadUsers();
+			},
+			
+			// 清除搜索
+			clearSearch() {
+				this.searchKeyword = '';
+				this.page = 1;
+				this.loadUsers();
+			},
+			
 			// 加载用户列表
 			loadUsers() {
 				this.isLoading = true;
 				
 				const role = this.roleOptions[this.currentRoleIndex].id;
+				const keyword = this.searchKeyword;
 				
 				uniCloud.callFunction({
 					name: 'user',
@@ -246,6 +304,7 @@
 						action: 'getUsers',
 						data: {
 							role: role || undefined, // 如果是全部角色，则不传role
+							keyword: keyword,
 							page: this.page,
 							pageSize: this.pageSize
 						}
@@ -703,28 +762,114 @@
 	
 	.filter-bar {
 		display: flex;
-		justify-content: space-between;
-		align-items: center;
+		flex-direction: column;
 		margin-bottom: 30rpx;
 		background-color: #ffffff;
-		padding: 20rpx 30rpx;
+		padding: 20rpx;
 		border-radius: 16rpx;
 		box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
 	}
 	
+	.filter-top {
+		display: flex;
+		flex-direction: row;
+		justify-content: space-between;
+		align-items: center;
+		width: 100%;
+		margin-bottom: 20rpx;
+	}
+	
+	.filter-bottom {
+		display: flex;
+		flex-direction: row;
+		justify-content: flex-start;
+		width: 100%;
+	}
+	
 	.filter-item {
+		flex: 0 0 auto;
+		min-width: 200rpx;
+	}
+	
+	.search-box {
+		display: flex;
 		flex: 1;
+		align-items: center;
+		background-color: #f2f5fc;
+		border-radius: 40rpx;
+		padding: 0 30rpx;
+		height: 70rpx;
+		margin-right: 20rpx;
+		border: 2rpx solid transparent;
+	}
+	
+	.search-box:focus-within {
+		background-color: #fff;
+		border-color: #42b983;
+		box-shadow: 0 0 0 2rpx rgba(66, 185, 131, 0.1);
+	}
+	
+	.search-icon {
+		font-size: 32rpx;
+		color: #6c7a98;
+		margin-right: 10rpx;
+	}
+	
+	.search-input {
+		flex: 1;
+		font-size: 28rpx;
+		color: #333;
+		height: 70rpx;
+		line-height: 70rpx;
+	}
+	
+	.clear-icon {
+		font-size: 36rpx;
+		color: #94a3b8;
+		width: 60rpx;
+		height: 60rpx;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 30rpx;
+		transition: all 0.3s ease;
+	}
+	
+	.clear-icon:active {
+		background-color: rgba(148, 163, 184, 0.1);
+	}
+	
+	.add-btn {
+		background: linear-gradient(135deg, #42b983, #2cb673);
+		color: #fff;
+		border-radius: 40rpx;
+		padding: 0 30rpx;
+		font-weight: 500;
+		border: none;
+		height: 70rpx;
+		line-height: 70rpx;
+		font-size: 28rpx;
+		box-shadow: 0 4rpx 10rpx rgba(7, 193, 96, 0.3);
+		transition: all 0.3s ease;
+		white-space: nowrap;
+	}
+	
+	.add-btn:active {
+		transform: translateY(2rpx);
+		box-shadow: 0 2rpx 6rpx rgba(7, 193, 96, 0.3);
 	}
 	
 	.picker-box {
 		display: flex;
+		flex-direction: row;
 		align-items: center;
 		justify-content: space-between;
-		height: 80rpx;
-		padding: 0 20rpx;
+		height: 70rpx;
+		padding: 0 30rpx;
 		background-color: #f2f5fc;
-		border-radius: 12rpx;
+		border-radius: 40rpx;
 		transition: all 0.3s ease;
+		white-space: nowrap;
 	}
 	
 	.picker-box:active {
@@ -735,40 +880,71 @@
 		font-size: 28rpx;
 		font-weight: 500;
 		color: #333;
+		margin-right: 10rpx;
 	}
 	
 	.picker-arrow {
 		font-size: 24rpx;
 		color: #6c7a98;
-		transition: transform 0.3s ease;
 	}
 	
 	.action-btns {
-		margin-left: 20rpx;
+		display: flex;
+		flex-direction: row;
+		flex-wrap: nowrap;
+		margin-left: auto;
+		flex: 0 0 auto;
+		margin-bottom: 10rpx;
 	}
 	
-	.add-btn {
-		background: linear-gradient(135deg, #42b983, #2cb673);
-		color: #fff;
+	.search-hint {
+		margin-bottom: 20rpx;
+		padding: 10rpx 20rpx;
+		background-color: #f8fafc;
 		border-radius: 12rpx;
-		padding: 10rpx 30rpx;
-		font-weight: 500;
-		border: none;
-		box-shadow: 0 4rpx 10rpx rgba(7, 193, 96, 0.3);
-		transition: all 0.3s ease;
+		border-left: 4rpx solid #42b983;
 	}
 	
-	.add-btn:active {
-		transform: translateY(2rpx);
-		box-shadow: 0 2rpx 6rpx rgba(7, 193, 96, 0.3);
+	.hint-text {
+		font-size: 26rpx;
+		color: #64748b;
+		font-weight: 500;
 	}
 	
 	.user-list {
 		margin-top: 20rpx;
 	}
 	
+	.loading-box {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 60rpx 0;
+	}
+	
+	.loader {
+		width: 60rpx;
+		height: 60rpx;
+		border: 8rpx solid #f3f3f3;
+		border-top: 8rpx solid #42b983;
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+		margin-bottom: 20rpx;
+	}
+	
+	@keyframes spin {
+		0% { transform: rotate(0deg); }
+		100% { transform: rotate(360deg); }
+	}
+	
+	.loading-text {
+		font-size: 28rpx;
+		color: #64748b;
+		font-weight: 500;
+	}
+	
 	.no-data {
-		padding: 100rpx 0;
+		padding: 60rpx 0;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -776,23 +952,41 @@
 	}
 	
 	.no-data-icon {
-		width: 240rpx;
-		height: 240rpx;
+		width: 200rpx;
+		height: 200rpx;
 		margin-bottom: 30rpx;
 		opacity: 0.7;
 	}
 	
 	.no-data-text {
-		font-size: 32rpx;
+		font-size: 30rpx;
 		color: #94a3b8;
 		font-weight: 500;
+	}
+	
+	.no-data-actions {
+		margin-top: 20rpx;
+	}
+	
+	.clear-search-btn {
+		background-color: #f1f5f9;
+		color: #64748b;
+		border-radius: 40rpx;
+		padding: 12rpx 30rpx;
+		font-size: 28rpx;
+		font-weight: 500;
+		transition: all 0.3s ease;
+	}
+	
+	.clear-search-btn:active {
+		transform: scale(0.98);
 	}
 	
 	.user-item {
 		background-color: #fff;
 		border-radius: 16rpx;
-		padding: 30rpx;
-		margin-bottom: 30rpx;
+		padding: 20rpx;
+		margin-bottom: 20rpx;
 		box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
 		transition: transform 0.3s ease, box-shadow 0.3s ease;
 		border-left: 8rpx solid transparent;
@@ -816,29 +1010,28 @@
 	}
 	
 	.user-info {
-		margin-bottom: 20rpx;
+		margin-bottom: 16rpx;
 	}
 	
 	.info-row {
 		display: flex;
 		align-items: center;
-		margin-bottom: 16rpx;
+		margin-bottom: 12rpx;
 	}
 	
 	.user-name {
-		font-size: 36rpx;
+		font-size: 32rpx;
 		font-weight: bold;
 		margin-right: 20rpx;
 		color: #334155;
 	}
 	
 	.user-role {
-		font-size: 24rpx;
+		font-size: 22rpx;
 		color: #fff;
-		padding: 6rpx 20rpx;
+		padding: 4rpx 16rpx;
 		border-radius: 30rpx;
 		font-weight: 500;
-		box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
 	}
 	
 	.role-admin {
@@ -854,7 +1047,7 @@
 	}
 	
 	.user-username {
-		font-size: 28rpx;
+		font-size: 26rpx;
 		color: #64748b;
 	}
 	
@@ -862,14 +1055,14 @@
 		display: flex;
 		justify-content: flex-end;
 		flex-wrap: wrap;
-		padding-top: 20rpx;
+		padding-top: 16rpx;
 		border-top: 1rpx solid #f0f2f5;
 	}
 	
 	.action-btn {
-		margin-left: 16rpx;
+		margin-left: 12rpx;
 		margin-bottom: 10rpx;
-		padding: 10rpx 24rpx;
+		padding: 8rpx 20rpx;
 		border-radius: 30rpx;
 		background-color: #f8fafc;
 		transition: all 0.3s ease;
@@ -885,7 +1078,7 @@
 	}
 	
 	.action-text {
-		font-size: 26rpx;
+		font-size: 24rpx;
 		color: #475569;
 		font-weight: 500;
 	}

@@ -36,6 +36,8 @@ exports.main = async (event, context) => {
       return await getSubjectStats(data);
     case 'getIncompleteRaters':
       return await getIncompleteRaters(data);
+    case 'getRatedSubjectsByRater':
+      return await getRatedSubjectsByRater(data);
     default:
       return {
         code: -1,
@@ -612,7 +614,7 @@ async function getRaterStats(data, context) {
         table_id: db.command.in([table._id])
       }).get();
       
-      // 获取该表的评分记录
+      // 获取该表该评分员已完成的评分记录
       const ratings = await ratingCollection.where({
         table_id: table._id,
         rater
@@ -1064,6 +1066,75 @@ async function getIncompleteRaters(data) {
     return {
       code: -1,
       msg: '获取未完成评分人员失败: ' + e.message,
+      error: e.message
+    };
+  }
+} 
+
+// 获取评分员已评分的考核对象列表及分数
+async function getRatedSubjectsByRater(data) {
+  const { tableId, rater } = data;
+  
+  console.log('获取评分员已评分的考核对象，参数:', data);
+  
+  try {
+    // 参数校验
+    if (!tableId) {
+      console.error('获取已评分考核对象缺少tableId参数');
+      return {
+        code: -1,
+        msg: '缺少必要参数: tableId',
+        missing: ['tableId']
+      };
+    }
+    
+    if (!rater) {
+      console.error('获取已评分考核对象缺少rater参数');
+      return {
+        code: -1,
+        msg: '缺少必要参数: rater',
+        missing: ['rater']
+      };
+    }
+    
+    // 构建查询条件
+    const queryCondition = {
+      table_id: tableId,
+      rater: rater
+    };
+    
+    console.log('查询条件:', JSON.stringify(queryCondition));
+    
+    // 获取该评分员在该表的所有评分记录
+    const ratings = await ratingCollection.where(queryCondition).get();
+    
+    console.log(`找到${ratings.data.length}条评分记录`);
+    
+    // 格式化结果
+    const ratedSubjects = ratings.data.map(rating => {
+      return {
+        id: rating._id,
+        name: rating.subject,
+        score: rating.total_score || 0,
+        rating_date: rating.rating_date || rating.update_date || new Date()
+      };
+    });
+    
+    // 按评分分数从高到低排序
+    ratedSubjects.sort((a, b) => b.score - a.score);
+    
+    return {
+      code: 0,
+      msg: '获取已评分考核对象成功',
+      data: {
+        ratedSubjects: ratedSubjects
+      }
+    };
+  } catch (e) {
+    console.error('获取已评分考核对象失败:', e);
+    return {
+      code: -1,
+      msg: `获取已评分考核对象失败: ${e.message}`,
       error: e.message
     };
   }

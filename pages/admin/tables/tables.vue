@@ -36,7 +36,7 @@
 		
 		<view class="table-list">
 			<view class="no-data" v-if="tables.length === 0">
-				<image class="no-data-icon" src="/static/images/no-data.png" mode="aspectFit"></image>
+				<image class="no-data-icon"   mode="aspectFit"></image>
 				<text class="no-data-text">暂无评分表</text>
 			</view>
 			
