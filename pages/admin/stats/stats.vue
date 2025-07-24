@@ -72,7 +72,7 @@
 			<view class="section-title">考核对象得分统计</view>
 			
 			<view class="no-data" v-if="subjects.length === 0">
-				<image class="no-data-icon" src="/static/images/no-data.png" mode="aspectFit"></image>
+				<image class="no-data-icon"   mode="aspectFit"></image>
 				<text class="no-data-text">暂无考核对象得分数据</text>
 			</view>
 			

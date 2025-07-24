@@ -1,39 +1,23 @@
 <template>
 	<view class="container">
-		<!-- 表格信息 -->
-		<view class="table-info" v-if="table">
-			<view class="table-header">
-				<text class="table-name">{{table.name}}</text>
-				<text class="table-type">{{tableTypes && tableTypes[table.type] || '未知类型'}}</text>
+		<!-- 顶部固定悬浮的已评分信息 -->
+		<view class="top-fixed-rated">
+			<view class="rated-info" v-if="displayRatedSubjects.length > 0">
+				<text class="rated-count">已评分: {{subjectRatingStatus ? subjectRatingStatus.filter(Boolean).length : 0}}/{{subjects.length}}</text>
+				<text class="rated-hint">请避免相同分数</text>
 			</view>
-			<text class="table-category">{{table.category}}</text>
-		</view>
-		
-		<!-- 考核对象选择器 -->
-		<view class="subject-selector" v-if="subjects && subjects.length > 0">
-			<view class="selector-header">
-				<text class="section-title">考核对象</text>
-				<text class="progress-text">已评分: {{subjectRatingStatus ? subjectRatingStatus.filter(Boolean).length : 0}}/{{subjects.length}}</text>
+			<text class="no-rated-hint" v-else>暂无评分记录</text>
+			
+			<view class="rated-grid">
+				<view v-for="(subject, index) in displayRatedSubjects" :key="index"
+					:class="['rated-item', subject.isTemp ? 'temp-score' : '']">
+					<text class="rated-name">{{subject.name}}</text>
+					<text :class="['rated-score', subject.isTemp ? 'temp-text' : '']">
+						{{subject.score}}分{{subject.isTemp ? '*' : ''}}
+					</text>
+				</view>
 			</view>
-			<scroll-view class="subject-tabs" scroll-x="true">
-				<view v-for="(subject, index) in subjects" :key="index" 
-					:class="['subject-tab', currentSubjectIndex === index ? 'active' : '']"
-					@click="switchToSubject(index)">
-					<view v-if="subjectRatingStatus && subjectRatingStatus[index]" class="subject-status">已评</view>
-					<view class="subject-info">
-					<text class="subject-name">{{subject && subject.name || ''}}</text>
-						<text class="subject-score-value" v-if="subject && subject._id && getSubjectTotalScore(subject._id) !== null">
-							{{getSubjectTotalScore(subject._id)}}分
-						</text>
-					</view>
-				</view>
-			</scroll-view>
-			<view class="subject-nav">
-				<button size="mini" @click="prevSubject" :disabled="currentSubjectIndex === 0">上一个</button>
-				<button size="mini" @click="nextSubject" :disabled="currentSubjectIndex === subjects.length - 1">下一个</button>
-				</view>
 		</view>
-		
 		<!-- 评分内容区 -->
 		<view class="rating-content" v-if="currentSubject && currentSubject._id">
 			<!-- 栏目分值参考展示 -->
@@ -52,6 +36,41 @@
 				</view>
 				</view>
 			</view>
+		<!-- 表格信息 -->
+		<view class="table-info" v-if="table">
+			<view class="table-header">
+				<text class="table-name">{{table.name}}</text>
+				<text class="table-type">{{tableTypes && tableTypes[table.type] || '未知类型'}}</text>
+			</view>
+			<view class="table-info-row">
+				<text class="table-category">{{table.category}}</text>
+				<view class="show-rated-btn" @click="toggleRatedFloat">
+					<text class="show-rated-text">已评</text>
+					<text class="show-rated-count">{{subjectRatingStatus ? subjectRatingStatus.filter(Boolean).length : 0}}/{{subjects.length}}</text>
+				</view>
+			</view>
+		</view>
+		
+		<!-- 考核对象选择器 -->
+		<view class="subject-selector" v-if="subjects && subjects.length > 0">
+			<view class="selector-header">
+				<text class="section-title">考核对象</text>
+				<text class="progress-text">已评分: {{subjectRatingStatus ? subjectRatingStatus.filter(Boolean).length : 0}}/{{subjects.length}}</text>
+			</view>
+			<view class="subject-grid">
+				<view v-for="(subject, index) in subjects" :key="index" 
+					:class="['subject-grid-item', currentSubjectIndex === index ? 'active' : '']"
+					@click="switchToSubject(index)">
+					<view v-if="subjectRatingStatus && subjectRatingStatus[index]" class="subject-status">已评</view>
+					<text class="subject-name">{{subject && subject.name || ''}}</text>
+					<text class="subject-score-value" v-if="subject && subject._id && getSubjectTotalScore(subject._id) !== null">
+						{{getSubjectTotalScore(subject._id)}}分
+					</text>
+				</view>
+			</view>
+		</view>
+		
+		
 			
 			<!-- 评分比例规则提示 -->
 			<view class="rating-rules-container">
@@ -67,25 +86,32 @@
 					<text class="total-input-title">总分评定</text>
 					<text class="total-input-max">满分：100分</text>
 				</view>
-				<view class="total-input-hint emphasis">
-					<text>请根据以上评分标准，直接输入总分</text>
-				</view>
-				<view class="total-input">
-					<slider :min="0" :max="100" :value="getTotalScoreValue()" :step="1" :show-value="false"
-						@change="handleTotalScoreChange" block-color="#07c160" activeColor="#07c160" block-size="40" style="width: 85%;" />
-					<view class="score-input-box" @click="showScoreInput">
-						<text class="score-value">{{calculateTotalScore()}}</text>
-					</view>
+				<view class="score-direct-input">
+					<text class="input-label">直接输入分数：</text>
+					<input type="digit" v-model="inputScore" class="score-input" placeholder="0-100" 
+						@blur="handleDirectScoreInput" maxlength="3" />
+					<button class="confirm-score-btn" @click="handleDirectScoreInput">确定</button>
 				</view>
 				<view class="total-input-hint">
 					<text class="total-display">当前总分：<text class="total-current">{{calculateTotalScore()}}</text>分</text>
-					<text class="score-input-tip">(点击数字可直接输入)</text>
 				</view>
 			</view>
 			
-			<!-- 提交按钮 -->
+			<!-- 提交按钮 横向排列 -->
 			<view class="submit-container">
-				<button type="primary" @click="handleSubmit">提交评分</button>
+				<view class="navigation-btns" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center;">
+					<button type="default" class="nav-btn prev-btn" @click="prevSubject" :disabled="currentSubjectIndex === 0" style="flex: 1; margin-right: 10rpx;">
+						<text class="nav-icon">←</text>
+						<text>上一人</text>
+					</button>
+					<button type="primary" class="submit-btn" @click="handleSubmit" style="flex: 2; margin: 0 10rpx;">
+						提交评分
+					</button>
+					<button type="default" class="nav-btn next-btn" @click="nextSubject" :disabled="currentSubjectIndex === subjects.length - 1" style="flex: 1; margin-left: 10rpx;">
+						<text>下一人</text>
+						<text class="nav-icon">→</text>
+					</button>
+				</view>
 			</view>
 			</view>
 			
@@ -133,7 +159,10 @@
 					3: 'B类分管班子评分',
 					4: 'B类驻村工作评分',
 					5: 'B类办主任评分'
-				}
+				},
+				ratedSubjects: [], // 已评分人员的列表
+				tempScores: {}, // 存储临时分数，未保存的本地分数
+				displayRatedSubjects: [] // 用于显示的已评分列表，包含临时分数
 			}
 		},
 		computed: {
@@ -160,6 +189,11 @@
 			if (options && options.tableId) {
 				this.tableId = options.tableId;
 				this.loadTableDetail();
+				
+				// 页面加载时自动获取已评分记录
+				this.$nextTick(() => {
+					this.loadRatedSubjects();
+				});
 			} else {
 				uni.showToast({
 					title: '参数错误',
@@ -171,7 +205,12 @@
 			}
 		},
 		onReady() {
-			// 不需要手动设置popup属性
+			// 确保页面准备就绪后加载评分记录
+			this.loadRatedSubjects();
+		},
+		onShow() {
+			// 页面显示时刷新评分记录
+			this.loadRatedSubjects();
 		},
 		methods: {
 			// 获取本地存储的用户信息
@@ -341,6 +380,10 @@
 				if (index === undefined || index === null) return;
 				
 				console.log('选择考核对象变更, 从', this.currentSubjectIndex, '到', index);
+				
+				// 保存当前评分状态
+				this.saveCurrentRating();
+				
 				this.currentSubjectIndex = index;
 				
 				if (this.subjects && index >= 0 && index < this.subjects.length) {
@@ -415,6 +458,14 @@
 								if (this.currentSubject._id && this.scores) {
 									this.allScores[this.currentSubject._id] = JSON.parse(JSON.stringify(this.scores));
 									console.log('保存评分到allScores:', this.currentSubject._id, this.allScores[this.currentSubject._id]);
+									
+									// 如果是已提交的分数，删除临时分数
+									if (this.tempScores[this.currentSubject._id]) {
+										delete this.tempScores[this.currentSubject._id];
+									}
+									
+									// 更新显示
+									this.updateRatedSubjectsList();
 								}
 							}
 						} else {
@@ -424,15 +475,42 @@
 							this.existingRating = null;
 							this.initScores(); // 重新初始化评分
 							console.log('为当前考核对象创建新评分');
+							
+							// 更新临时分数显示
+							this.updateTempScore();
 						}
 					} else {
 						console.log('获取评分记录失败或无数据');
 						// 确保当前评分已重置
 						this.existingRating = null;
+						
+						// 检查是否有临时分数
+						if (this.currentSubject._id && this.tempScores[this.currentSubject._id]) {
+							// 使用临时分数
+							const tempScore = this.tempScores[this.currentSubject._id].score;
+							this.handleTotalScoreChange({
+								detail: { value: tempScore }
+							});
+						}
+						
+						// 更新临时分数显示
+						this.updateTempScore();
 					}
 				}).catch(err => {
 					console.error('加载评分记录失败:', err);
 					this.existingRating = null;
+					
+					// 检查是否有临时分数
+					if (this.currentSubject._id && this.tempScores[this.currentSubject._id]) {
+						// 使用临时分数
+						const tempScore = this.tempScores[this.currentSubject._id].score;
+						this.handleTotalScoreChange({
+							detail: { value: tempScore }
+						});
+					}
+					
+					// 更新临时分数显示
+					this.updateTempScore();
 				});
 			},
 			
@@ -472,8 +550,151 @@
 				return max;
 			},
 			
-			// 提交评分
+			// 处理总分变化，同时更新临时分数
+			handleTotalScoreChange(e) {
+				if (!e || !e.detail) return;
+				
+				const totalScore = e.detail.value;
+				if (totalScore === undefined || totalScore === null) return;
+				
+				// 不允许100分
+				if (totalScore === 100) {
+					uni.showToast({
+						title: '不允许输入100分',
+						icon: 'none'
+					});
+					return;
+				}
+				
+				// 检查分数是否已存在
+				if (this.isScoreExist(totalScore)) {
+					uni.showToast({
+						title: '分数' + totalScore + '已存在，不允许重复',
+						icon: 'none'
+					});
+					return;
+				}
+				
+				if (totalScore >= 0 && totalScore <= 100) {
+					// 计算各项分数比例
+					const totalMaxScore = this.calculateMaxScore();
+					if (totalMaxScore <= 0 || !this.table || !this.table.items) return;
+					
+					// 根据总分自动分配到各评分项
+					this.scores = this.table.items.map(item => {
+						if (!item) return { item_id: '', name: '', score: 0, maxScore: 0 };
+						
+						// 按权重分配总分
+						const proportion = (item.maxScore || 0) / totalMaxScore;
+						const itemScore = Math.round(totalScore * proportion);
+						
+						return {
+							item_id: item._id || '',
+							name: item.name || '',
+							score: itemScore,
+							maxScore: item.maxScore || 0
+						};
+					});
+					
+					// 处理舍入误差，确保总分准确
+					const calculatedTotal = this.calculateTotalScore();
+					if (calculatedTotal !== totalScore && this.scores && this.scores.length > 0) {
+						// 调整最后一项分数以确保总分正确
+						const diff = totalScore - calculatedTotal;
+						const lastIndex = this.scores.length - 1;
+						if (this.scores[lastIndex]) {
+							this.scores[lastIndex].score = (this.scores[lastIndex].score || 0) + diff;
+						}
+					}
+					
+					console.log('根据总分自动分配后的评分:', this.scores, '总分:', this.calculateTotalScore());
+					
+					// 保存临时分数
+					this.updateTempScore();
+				}
+			},
+			
+			// 更新临时分数
+			updateTempScore() {
+				if (!this.currentSubject || !this.currentSubject._id) return;
+				
+				const subjectId = this.currentSubject._id;
+				const subjectName = this.currentSubject.name;
+				const score = this.calculateTotalScore();
+				
+				// 更新临时分数
+				this.tempScores[subjectId] = {
+					id: subjectId,
+					name: subjectName,
+					score: score
+				};
+				
+				// 重新加载顶部已评分列表，以显示临时分数
+				this.updateRatedSubjectsList();
+			},
+			
+			// 检查分数是否已存在
+			isScoreExist(score) {
+				// 获取当前所有分数(包括已保存和临时分数)的列表
+				const allScores = [...this.displayRatedSubjects].map(subject => subject.score);
+				
+				// 如果是当前正在编辑的考核对象的分数，则不计入重复检查
+				if (this.currentSubject && this.currentSubject._id) {
+					const currentIndex = this.displayRatedSubjects.findIndex(
+						subject => subject.name === this.currentSubject.name
+					);
+					if (currentIndex >= 0) {
+						// 移除当前考核对象的分数
+						allScores.splice(currentIndex, 1);
+					}
+				}
+				
+				console.log('当前所有其他分数:', allScores, '检查分数:', score);
+				
+				// 检查是否有重复分数
+				return allScores.includes(score);
+			},
+
+			// 处理直接输入的分数
+			handleDirectScoreInput() {
+				if (parseInt(this.inputScore) < 0 || parseInt(this.inputScore) > 100) {
+					uni.showToast({
+						title: '请输入0-100之间的整数',
+						icon: 'none'
+					});
+					this.inputScore = ''; // 清空输入
+					return;
+				}
+				
+				if (this.inputScore == 100) {
+					uni.showToast({
+						title: '不允许输入100分',
+						icon: 'none'
+					});
+					this.inputScore = ''; // 清空输入
+					return;
+				}
+				
+				// 检查分数是否已存在
+				const score = parseInt(this.inputScore);
+				if (this.isScoreExist(score)) {
+					uni.showToast({
+						title: '分数' + score + '已存在，不允许重复',
+						icon: 'none'
+					});
+					this.inputScore = ''; // 清空输入
+					return;
+				}
+				
+				this.handleTotalScoreChange({
+					detail: { value: score }
+				});
+				this.inputScore = ''; // 清空输入
+			},
+			
+			// 提交评分后，清除临时分数
 			handleSubmit() {
+				// 首先验证当前评分
 				if (!this.currentSubject || !this.currentSubject._id) {
 					uni.showToast({
 						title: '请选择考核对象',
@@ -521,70 +742,54 @@
 					return;
 				}
 				
-				uni.showLoading({
-					title: '提交中...'
-				});
+				// 保存当前评分到临时分数和allScores
+				this.saveCurrentRating();
 				
-				uniCloud.callFunction({
-					name: 'rating',
-					data: {
-						action: 'submitRating',
-						data: {
-							table_id: this.tableId,
-							rater: userInfo.username,
-							subject: this.currentSubject.name,
-							scores: this.scores
+				// 收集所有需要提交的评分
+				const pendingSubmissions = [];
+				
+				// 1. 添加当前考核对象
+				if (this.currentSubject && this.currentSubject._id && this.allScores[this.currentSubject._id]) {
+					pendingSubmissions.push({
+						subjectId: this.currentSubject._id,
+						subjectName: this.currentSubject.name,
+						scores: this.allScores[this.currentSubject._id]
+					});
+				}
+				
+				// 2. 添加所有临时分数对应的考核对象
+				for (const subjectId in this.tempScores) {
+					// 避免重复添加当前考核对象
+					if (subjectId !== this.currentSubject._id) {
+						const subject = this.subjects.find(s => s._id === subjectId);
+						if (subject && this.allScores[subjectId]) {
+							pendingSubmissions.push({
+								subjectId: subjectId,
+								subjectName: subject.name,
+								scores: this.allScores[subjectId]
+							});
 						}
 					}
-				}).then(res => {
-					uni.hideLoading();
-					
-					if (res.result && res.result.code === 0) {
-						uni.showToast({
-							title: '评分提交成功',
-							icon: 'success'
-						});
-						
-						// 更新评分记录
-						this.existingRating = {
-							_id: res.result.data.id,
-							tableId: this.tableId,
-							rater: userInfo.username,
-							subject: this.currentSubject.name,
-							scores: this.scores,
-							total_score: this.calculateTotalScore()
-						};
-						
-						// 更新状态
-						if (this.subjectRatingStatus && 
-							this.currentSubjectIndex >= 0 && 
-							this.currentSubjectIndex < this.subjectRatingStatus.length) {
-							this.$set(this.subjectRatingStatus, this.currentSubjectIndex, true);
-						}
-						
-						// 从待提交列表中移除
-						if (this.pendingSubmissions && this.currentSubject._id) {
-							const index = this.pendingSubmissions.indexOf(this.currentSubject._id);
-							if (index > -1) {
-								this.pendingSubmissions.splice(index, 1);
-							}
-						}
-						
-						// 自动进入下一个未评分的对象
-						this.goToNextUnrated();
-					} else {
-						uni.showToast({
-							title: res.result && res.result.msg || '提交失败',
-							icon: 'none'
-						});
-					}
-				}).catch(err => {
-					uni.hideLoading();
-					console.error(err);
+				}
+				
+				// 如果没有需要提交的评分
+				if (pendingSubmissions.length === 0) {
 					uni.showToast({
-						title: '提交失败，请检查网络',
+						title: '没有需要提交的评分',
 						icon: 'none'
 					});
+					return;
+				}
+				
+				// 显示提交确认对话框
+				uni.showModal({
+					title: '提交评分',
+					content: `将提交${pendingSubmissions.length}个考核对象的评分，确认继续？`,
+					success: (res) => {
+						if (res.confirm) {
+							this.submitAllRatings(pendingSubmissions, userInfo.username);
+						}
+					}
 				});
 			},
 			switchToSubject(index) {
@@ -620,6 +825,9 @@
 				if (this.scores) {
 					this.allScores[this.currentSubject._id] = JSON.parse(JSON.stringify(this.scores));
 					console.log('保存的分数:', this.allScores[this.currentSubject._id]);
+					
+					// 更新临时分数
+					this.updateTempScore();
 				}
 				
 				if (this.pendingSubmissions && 
@@ -645,6 +853,9 @@
 					// 创建深拷贝，避免引用问题
 					this.scores = JSON.parse(JSON.stringify(this.allScores[this.currentSubject._id]));
 					console.log('已加载缓存评分，当前分数:', this.calculateTotalScore());
+					
+					// 更新临时分数显示
+					this.updateTempScore();
 					return;
 				}
 				
@@ -677,83 +888,101 @@
 					icon: 'success'
 				});
 			},
-			submitAllRatings() {
-				if (!this.pendingSubmissions || this.pendingSubmissions.length === 0) {
-					uni.showToast({
-						title: '没有待提交的评分',
-						icon: 'none'
-					});
+			// 批量提交评分
+			submitAllRatings(submissions, raterUsername) {
+				if (!submissions || submissions.length === 0 || !raterUsername) {
 					return;
 				}
 				
 				uni.showLoading({
-					title: '批量提交中...'
+					title: `提交中 (0/${submissions.length})...`
 				});
 				
-				// 获取并检查用户信息
-				const userInfo = this.getUserInfo();
-				console.log('批量提交评分前的用户信息:', userInfo);
+				// 提交计数器
+				let completedCount = 0;
+				let successCount = 0;
+				let errorMessages = [];
 				
-				// 检查用户信息是否存在
-				if (!userInfo || !userInfo.username) {
-					console.error('批量提交评分时用户未登录或登录状态已失效!');
-					uni.hideLoading();
-					uni.showToast({
-						title: '用户信息不存在或已过期，请重新登录',
-						icon: 'none',
-						duration: 2000
-					});
-					// 延迟跳转到登录页
-					setTimeout(() => {
-						uni.navigateTo({
-							url: '/pages/login/login'
-						});
-					}, 2000);
-					return;
-				}
-				
-				const promises = this.pendingSubmissions.map(subjectId => {
-					const subject = this.subjects ? this.subjects.find(s => s && s._id === subjectId) : null;
-					const scores = this.allScores && subjectId ? this.allScores[subjectId] : null;
-					
-					if (!subject || !scores) return Promise.resolve({ result: { code: -1 } });
-					
-					return uniCloud.callFunction({
-						name: 'rating',
-						data: {
-							action: 'submitRating',
+				// 逐个提交评分
+				const promises = submissions.map((submission, index) => {
+					return new Promise((resolve) => {
+						uniCloud.callFunction({
+							name: 'rating',
 							data: {
-								table_id: this.tableId,
-								rater: userInfo.username,
-								subject: subject.name,
-								scores: scores
+								action: 'submitRating',
+								data: {
+									table_id: this.tableId,
+									rater: raterUsername,
+									subject: submission.subjectName,
+									scores: submission.scores
+								}
 							}
-						}
+						}).then(res => {
+							completedCount++;
+							
+							// 更新加载提示
+							uni.showLoading({
+								title: `提交中 (${completedCount}/${submissions.length})...`
+							});
+							
+							if (res.result && res.result.code === 0) {
+								successCount++;
+								
+								// 更新评分状态
+								const subjectIndex = this.subjects.findIndex(s => s._id === submission.subjectId);
+								if (subjectIndex >= 0 && this.subjectRatingStatus) {
+									this.$set(this.subjectRatingStatus, subjectIndex, true);
+								}
+								
+								// 删除临时分数
+								if (this.tempScores[submission.subjectId]) {
+									delete this.tempScores[submission.subjectId];
+								}
+								
+								resolve(true);
+							} else {
+								errorMessages.push(`${submission.subjectName}: ${res.result?.msg || '提交失败'}`);
+								resolve(false);
+							}
+						}).catch(err => {
+							completedCount++;
+							errorMessages.push(`${submission.subjectName}: ${err.message || '网络错误'}`);
+							resolve(false);
+						});
 					});
 				});
 				
-				Promise.all(promises).then(results => {
+				// 等待所有提交完成
+				Promise.all(promises).then(() => {
 					uni.hideLoading();
 					
-					const successCount = results.filter(res => res.result && res.result.code === 0).length;
-					
-					this.pendingSubmissions = [];
-					
-					if (this.subjects && this.subjects.length > 0) {
-						this.subjectRatingStatus = this.subjects.map(() => true);
+					if (successCount > 0) {
+						uni.showToast({
+							title: `成功提交${successCount}/${submissions.length}个评分`,
+							icon: 'success',
+							duration: 2000
+						});
+						
+						// 更新已评分列表
+						this.loadRatedSubjects();
+						
+						// 如果存在失败的提交，显示错误信息
+						if (errorMessages.length > 0) {
+							setTimeout(() => {
+								uni.showModal({
+									title: '部分评分提交失败',
+									content: errorMessages.join('\n'),
+									showCancel: false
+								});
+							}, 2000);
+						}
+					} else {
+						uni.showModal({
+							title: '提交失败',
+							content: errorMessages.join('\n'),
+							showCancel: false
+						});
 					}
-					
-					uni.showToast({
-						title: `成功提交${successCount}条评分`,
-						icon: 'success'
-					});
-				}).catch(err => {
-					uni.hideLoading();
-					uni.showToast({
-						title: '批量提交失败',
-						icon: 'none'
-					});
-					console.error(err);
 				});
 			},
 			// 加载所有考核对象的评分状态
@@ -893,48 +1122,6 @@
 			getTotalScoreValue() {
 				return this.calculateTotalScore();
 			},
-			// 处理总分变化
-			handleTotalScoreChange(e) {
-				if (!e || !e.detail) return;
-				
-				const totalScore = e.detail.value;
-				if (totalScore === undefined || totalScore === null) return;
-				
-				if (totalScore >= 0 && totalScore <= 100) {
-					// 计算各项分数比例
-					const totalMaxScore = this.calculateMaxScore();
-					if (totalMaxScore <= 0 || !this.table || !this.table.items) return;
-					
-					// 根据总分自动分配到各评分项
-					this.scores = this.table.items.map(item => {
-						if (!item) return { item_id: '', name: '', score: 0, maxScore: 0 };
-						
-						// 按权重分配总分
-						const proportion = (item.maxScore || 0) / totalMaxScore;
-						const itemScore = Math.round(totalScore * proportion);
-						
-						return {
-							item_id: item._id || '',
-							name: item.name || '',
-							score: itemScore,
-							maxScore: item.maxScore || 0
-						};
-					});
-					
-					// 处理舍入误差，确保总分准确
-					const calculatedTotal = this.calculateTotalScore();
-					if (calculatedTotal !== totalScore && this.scores && this.scores.length > 0) {
-						// 调整最后一项分数以确保总分正确
-						const diff = totalScore - calculatedTotal;
-						const lastIndex = this.scores.length - 1;
-						if (this.scores[lastIndex]) {
-							this.scores[lastIndex].score = (this.scores[lastIndex].score || 0) + diff;
-						}
-					}
-					
-					console.log('根据总分自动分配后的评分:', this.scores, '总分:', this.calculateTotalScore());
-				}
-			},
 			// 显示分数输入弹窗
 			showScoreInput() {
 				this.inputScore = this.calculateTotalScore().toString();
@@ -996,6 +1183,82 @@
 				}
 				
 				return { high, middle, low };
+			},
+			// 切换已评分浮动窗口的显示状态
+			toggleRatedFloat() {
+				// 刷新数据
+				this.loadRatedSubjects();
+			},
+			// 更新顶部显示的已评分列表，包含临时分数
+			updateRatedSubjectsList() {
+				// 复制已评分列表，以避免直接修改原始数据
+				const combinedList = [...this.ratedSubjects];
+				
+				// 遍历临时分数
+				Object.values(this.tempScores).forEach(tempItem => {
+					// 检查是否已存在于已评分列表中
+					const existingIndex = combinedList.findIndex(item => item.name === tempItem.name);
+					
+					if (existingIndex >= 0) {
+						// 如果已存在，更新分数
+						combinedList[existingIndex].score = tempItem.score;
+						combinedList[existingIndex].isTemp = true; // 标记为临时分数
+					} else {
+						// 如果不存在，添加到列表中
+						combinedList.push({
+							...tempItem,
+							isTemp: true // 标记为临时分数
+						});
+					}
+				});
+				
+				// 按分数排序
+				combinedList.sort((a, b) => b.score - a.score);
+				
+				// 更新显示
+				this.displayRatedSubjects = combinedList;
+			},
+			// 加载已评分的考核对象列表
+			loadRatedSubjects() {
+				console.log('开始加载已评分的考核对象列表');
+				
+				// 获取并检查用户信息
+				const userInfo = this.getUserInfo();
+				if (!userInfo || !userInfo.username) {
+					console.error('加载已评分的考核对象列表时用户未登录!');
+					this.ratedSubjects = [];
+					this.updateRatedSubjectsList(); // 更新显示
+					return;
+				}
+				
+				console.log('当前用户信息:', userInfo);
+				
+				uniCloud.callFunction({
+					name: 'rating',
+					data: {
+						action: 'getRatedSubjectsByRater',
+						data: {
+							tableId: this.tableId,
+							rater: userInfo.username
+						}
+					}
+				}).then(res => {
+					console.log('获取已评分的考核对象列表结果:', res.result);
+					if (res.result && res.result.code === 0 && res.result.data && res.result.data.ratedSubjects) {
+						this.ratedSubjects = res.result.data.ratedSubjects;
+						console.log('已评分的考核对象数量:', this.ratedSubjects.length);
+					} else {
+						this.ratedSubjects = [];
+						console.log('没有找到已评分的考核对象');
+					}
+					
+					// 更新显示列表，合并已保存评分和临时分数
+					this.updateRatedSubjectsList();
+				}).catch(err => {
+					console.error('加载已评分的考核对象列表失败:', err);
+					this.ratedSubjects = [];
+					this.updateRatedSubjectsList(); // 更新显示
+				});
 			}
 		}
 	}
@@ -1004,6 +1267,7 @@
 <style>
 	.container {
 		padding: 30rpx;
+		padding-top: 170rpx; /* 为顶部悬浮组件留出更多空间 */
 	}
 	
 	.table-info {
@@ -1039,6 +1303,39 @@
 		color: #999;
 	}
 	
+	.table-info-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-top: 16rpx;
+	}
+	
+	.show-rated-btn {
+		display: flex;
+		align-items: center;
+		background-color: #f0f9f4;
+		border: 1rpx solid rgba(7, 193, 96, 0.3);
+		border-radius: 24rpx;
+		padding: 8rpx 16rpx;
+		transition: all 0.3s;
+	}
+	
+	.show-rated-btn:active {
+		background-color: #e0f2e9;
+	}
+	
+	.show-rated-text {
+		font-size: 24rpx;
+		color: #07c160;
+		margin-right: 8rpx;
+	}
+	
+	.show-rated-count {
+		font-size: 24rpx;
+		color: #07c160;
+		font-weight: bold;
+	}
+	
 	.section-title {
 		font-size: 32rpx;
 		font-weight: bold;
@@ -1066,39 +1363,41 @@
 		color: #666;
 	}
 	
-	.subject-tabs {
-		white-space: nowrap;
-		margin-bottom: 15px;
+	.subject-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200rpx, 1fr)); /* 自适应列宽 */
+		gap: 15rpx; /* 网格间距 */
 	}
 	
-	.subject-tab {
-		display: inline-block;
-		padding: 10px 15px;
-		margin-right: 12px;
-		background-color: #f2f2f2;
-		border-radius: 20px;
-		position: relative;
-		min-width: 100rpx;
-	}
-	
-	.subject-tab.active {
-		background-color: #07c160;
-		color: white;
-	}
-	
-	.subject-tab.active .subject-score-value {
-		color: #ffffff;
-	}
-	
-	.subject-info {
+	.subject-grid-item {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
+		padding: 15rpx;
+		background-color: #f2f2f2;
+		border-radius: 16rpx;
+		border: 1rpx solid #eee;
+		transition: all 0.3s ease;
+	}
+	
+	.subject-grid-item.active {
+		background-color: #07c160;
+		color: white;
+		border-color: #07c160;
+	}
+	
+	.subject-grid-item.active .subject-score-value {
+		color: #ffffff;
 	}
 	
 	.subject-name {
 		font-size: 28rpx;
-		margin-bottom: 4rpx;
+		margin-top: 8rpx;
+		text-align: center;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 100%; /* 确保名字不会溢出 */
 	}
 	
 	.subject-score-value {
@@ -1319,6 +1618,43 @@
 		margin-left: 10rpx;
 	}
 	
+	.score-direct-input {
+		display: flex;
+		align-items: center;
+		margin-top: 15rpx;
+		padding: 10rpx 20rpx;
+		background-color: #fff;
+		border-radius: 12rpx;
+		border: 1rpx solid #eee;
+		box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+	}
+	
+	.input-label {
+		font-size: 28rpx;
+		color: #666;
+		margin-right: 10rpx;
+	}
+	
+	.score-input {
+		flex: 1;
+		font-size: 32rpx;
+		color: #333;
+		padding: 0 10rpx;
+		text-align: center;
+		border: none;
+		outline: none;
+		background-color: transparent;
+	}
+	
+	.confirm-score-btn {
+		font-size: 28rpx;
+		color: #07c160;
+		padding: 0 10rpx;
+		border: none;
+		background-color: transparent;
+		line-height: 1;
+	}
+	
 	.score-popup-container {
 		width: 80%;
 		background-color: #fff;
@@ -1414,11 +1750,350 @@
 	/* 提交按钮样式 */
 	.submit-container {
 		margin-top: 30rpx;
+		
+	}
+
+	.navigation-btns {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.nav-btn {
+		flex: 1;
+		height: 80rpx;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 28rpx;
+		background-color: #f2f2f2;
+		color: #333;
+		border: none;
+		border-radius: 8rpx;
+		padding: 0 10rpx;
+	}
+
+	.nav-btn:disabled {
+		opacity: 0.5;
+		color: #999;
+	}
+
+	.nav-icon {
+		font-size: 24rpx;
+		margin: 0 6rpx;
+	}
+
+	.submit-btn {
+		flex: 2;
+		height: 80rpx;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 30rpx;
+		background-color: #07c160;
+		color: #fff;
+		border: none;
+		border-radius: 8rpx;
+		margin: 0 20rpx;
+		font-weight: bold;
+	}
+
+	.prev-btn {
+		justify-content: flex-start;
+		padding-left: 20rpx;
+	}
+
+	.next-btn {
+		justify-content: flex-end;
+		padding-right: 20rpx;
 	}
 	
 	.no-subjects {
 		text-align: center;
 		padding: 50rpx;
 		color: #999;
+	}
+	
+	/* 顶部固定悬浮的已评分信息样式 */
+	.top-fixed-rated {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		z-index: 998;
+		background-color: #fff;
+		padding: 6rpx;
+		box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.1);
+		box-sizing: border-box;
+		animation: slideDown 0.3s ease;
+		display: flex;
+		flex-direction: column;
+		max-height: 35vh; /* 最大高度不超过屏幕的1/3 */
+		overflow-y: auto; /* 如果内容过多，允许垂直滚动 */
+	}
+
+	.rated-info {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 4rpx 10rpx;
+		margin-bottom: 4rpx;
+		border-bottom: 1px solid #f0f0f0;
+	}
+
+	.rated-count {
+		font-size: 24rpx;
+		color: #07c160;
+		font-weight: bold;
+	}
+
+	.rated-hint {
+		font-size: 24rpx;
+		color: #ff9800;
+	}
+
+	.no-rated-hint {
+		font-size: 24rpx;
+		color: #999;
+		text-align: center;
+		padding: 8rpx 0;
+	}
+
+	@keyframes slideDown {
+		from { transform: translateY(-100%); }
+		to { transform: translateY(0); }
+	}
+
+	.rated-grid {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-start; /* 从左开始排列 */
+		padding: 4rpx;
+		gap: 8rpx; /* 使用gap属性设置间距 */
+	}
+
+	.rated-grid::-webkit-scrollbar {
+		display: none; /* Chrome浏览器下隐藏滚动条 */
+	}
+
+	.rated-item {
+		display: flex;
+		flex-direction: row; /* 改为横向排列名称和分数 */
+		align-items: center;
+		justify-content: space-between;
+		background-color: #f8f8f8;
+		border-radius: 16rpx;
+		padding: 4rpx 8rpx;
+		border: 1rpx solid #eee;
+		width: calc(25% - 8rpx); /* 每行显示4个，减去间距 */
+		box-sizing: border-box;
+	}
+
+	.rated-name {
+		font-size: 22rpx;
+		color: #333;
+		margin-right: 4rpx;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 70rpx; /* 限制名字宽度 */
+	}
+
+	.rated-score {
+		font-size: 22rpx;
+		font-weight: bold;
+	}
+	
+	.high-score {
+		color: #07c160;
+	}
+	
+	.middle-score {
+		color: #ff9800;
+	}
+	
+	.low-score {
+		color: #f44336;
+	}
+	
+	/* 临时分数样式 */
+	.temp-score {
+		border: 1rpx dashed #42b983;
+		background-color: rgba(66, 185, 131, 0.05);
+	}
+
+	.temp-text {
+		font-style: italic;
+	}
+	
+	/* 已评分浮动窗口样式 */
+	.rated-subjects-drawer {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		z-index: 1000;
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
+		animation: fadeIn 0.3s ease;
+	}
+
+	@keyframes fadeIn {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	.drawer-mask {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background-color: rgba(0, 0, 0, 0.5);
+		z-index: -1;
+	}
+
+	.drawer-content {
+		width: 100%;
+		background-color: #fff;
+		border-top-left-radius: 24rpx;
+		border-top-right-radius: 24rpx;
+		box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.15);
+		display: flex;
+		flex-direction: column;
+		max-height: 80%;
+		animation: slideUp 0.3s ease;
+	}
+
+	@keyframes slideUp {
+		from { transform: translateY(100%); }
+		to { transform: translateY(0); }
+	}
+
+	.drawer-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 30rpx;
+		border-bottom: 1rpx solid #eee;
+		box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+	}
+	
+	.drawer-title {
+		font-size: 36rpx;
+		font-weight: bold;
+		color: #333;
+	}
+	
+	.drawer-close {
+		font-size: 40rpx;
+		color: #999;
+		padding: 10rpx;
+		height: 60rpx;
+		width: 60rpx;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 30rpx;
+	}
+	
+	.drawer-close:active {
+		background-color: rgba(0, 0, 0, 0.05);
+	}
+	
+	.drawer-body {
+		flex-grow: 1;
+		padding: 20rpx 30rpx;
+		overflow-y: auto;
+		max-height: 60vh;
+	}
+	
+	.drawer-footer {
+		padding: 24rpx 30rpx;
+		background-color: #fff;
+		border-top: 1rpx solid #eee;
+		box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.05);
+		border-bottom-left-radius: 24rpx;
+		border-bottom-right-radius: 24rpx;
+	}
+	
+	.drawer-hint {
+		font-size: 26rpx;
+		color: #666;
+		text-align: center;
+	}
+	
+	.rated-subject-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 20rpx 0;
+		border-bottom: 1rpx dashed #eee;
+	}
+	
+	.rated-subject-item:last-child {
+		border-bottom: none;
+	}
+	
+	.rated-subject-name {
+		font-size: 32rpx;
+		color: #333;
+		font-weight: bold;
+	}
+	
+	.rated-subject-score {
+		font-size: 32rpx;
+		font-weight: bold;
+	}
+	
+	.high-score {
+		color: #07c160;
+	}
+	
+	.middle-score {
+		color: #ff9800;
+	}
+	
+	.low-score {
+		color: #f44336;
+	}
+	
+	.no-rated {
+		text-align: center;
+		padding: 40rpx 0;
+		color: #999;
+	}
+	
+	/* 悬浮快捷按钮样式 */
+	.float-btn {
+		position: fixed;
+		bottom: 100rpx;
+		right: 30rpx;
+		width: 100rpx;
+		height: 100rpx;
+		background: linear-gradient(135deg, #07c160, #09ad56);
+		border-radius: 50%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		box-shadow: 0 6rpx 16rpx rgba(7, 193, 96, 0.4);
+		z-index: 999;
+		transition: all 0.3s;
+	}
+	
+	.float-btn:active {
+		transform: scale(0.95);
+		box-shadow: 0 3rpx 8rpx rgba(7, 193, 96, 0.4);
+	}
+	
+	.float-btn-text {
+		font-size: 28rpx;
+		color: #fff;
+		font-weight: bold;
+		text-align: center;
+		line-height: 32rpx;
 	}
 </style> 

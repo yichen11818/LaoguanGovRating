@@ -386,40 +386,158 @@ async function deleteUser(data) {
 
 // 获取用户列表
 async function getUsers(data) {
-  const { role, page = 1, pageSize = 10 } = data;
+  console.log('【getUsers】原始接收到的数据:', data);
+  const { role, page = 1, pageSize = 10, keyword = '' } = data;
+  
+  console.log('【getUsers】解构后的参数:', { 
+    role, 
+    page, 
+    pageSize, 
+    keyword,
+    keyword_type: typeof keyword,
+    keyword_length: (keyword || '').length,
+    has_keyword: !!keyword
+  });
   
   try {
-    let query = userCollection;
+    let where = {};
     
     // 如果指定了角色，则按角色筛选
     if (role) {
-      query = query.where({ role });
+      where.role = role;
+      console.log('【getUsers】添加角色过滤:', role);
     }
+    
+    // 如果有搜索关键字，则添加搜索条件
+    if (keyword) {
+      console.log('【getUsers】添加关键词搜索:', keyword);
+      
+      // 对关键词进行处理，去除特殊字符，防止正则表达式错误
+      const safeKeyword = keyword.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      console.log('【getUsers】安全处理后的关键词:', safeKeyword);
+      
+      // 尝试两种方式实现模糊搜索
+      try {
+        // 方法1：使用数据库RegExp方法进行模糊搜索
+        where = {
+          ...where,
+          $or: [
+            {
+              username: {
+                $regex: safeKeyword,
+                $options: 'i' // 忽略大小写
+              }
+            },
+            {
+              name: {
+                $regex: safeKeyword,
+                $options: 'i' // 忽略大小写
+              }
+            }
+          ]
+        };
+      } catch (regexError) {
+        console.error('【getUsers】正则表达式错误，尝试简单匹配:', regexError);
+        
+        // 方法2：简单包含匹配（如果正则表达式有问题）
+        where = {
+          ...where,
+          $or: [
+            // 使用js的includes方法来过滤
+            { username: { $not: null } }, // 先获取所有username不为null的用户
+            { name: { $not: null } }      // 先获取所有name不为null的用户
+          ]
+        };
+
+        // 记录需要手动过滤的关键词
+        where._searchKeyword = keyword;
+        console.log('【getUsers】将使用JS代码手动过滤关键词');
+
+        // 然后在后面的查询结果中进行手动过滤
+      }
+      
+      console.log('【getUsers】搜索条件构建完成:', JSON.stringify(where));
+    } else {
+      console.log('【getUsers】无搜索关键词，不添加搜索条件');
+    }
+    
+    // 构建查询
+    let query = userCollection.where(where);
     
     // 分页查询
     const userList = await query.skip((page - 1) * pageSize).limit(pageSize).get();
-    
+    console.log('【getUsers】查询结果数量:', userList.data.length);
+
     // 获取总数
     const countResult = await query.count();
-    
+    console.log('【getUsers】总记录数:', countResult.total);
+
     // 处理用户列表，移除密码
-    const users = userList.data.map(user => {
+    let users = userList.data.map(user => {
       const userObj = { ...user };
       delete userObj.password;
       return userObj;
     });
+
+    // 初始化总数
+    let totalCount = countResult.total;
+
+    // 如果有关键词但使用了备选方案，需要手动过滤
+    if (where._searchKeyword) {
+      const searchKeyword = where._searchKeyword.toLowerCase(); // 转换为小写进行不区分大小写的比较
+      console.log('【getUsers】手动过滤关键词:', searchKeyword);
+      
+      users = users.filter(user => {
+        const username = (user.username || '').toLowerCase();
+        const name = (user.name || '').toLowerCase();
+        
+        // 只要用户名或姓名包含关键词，就保留该记录
+        const match = username.includes(searchKeyword) || name.includes(searchKeyword);
+        
+        if (match) {
+          console.log(`【getUsers】匹配用户: ${user.username}, ${user.name}`);
+        }
+        
+        return match;
+      });
+      
+      console.log('【getUsers】手动过滤后结果数量:', users.length);
+      
+      // 手动过滤后，总数需要重新计算
+      // 这里的处理有局限性，因为我们只过滤了当前页的数据
+      // 真实的总数可能需要查询所有数据后再过滤计算
+      // 为了性能，这里简单估算总数
+      if (users.length < userList.data.length) {
+        // 如果过滤后数量减少，按比例估算总数
+        const filterRatio = users.length / userList.data.length;
+        totalCount = Math.ceil(totalCount * filterRatio);
+        console.log(`【getUsers】估算总记录数: ${totalCount} (过滤比例: ${filterRatio})`);
+      }
+    }
     
-    return {
+    const result = {
       code: 0,
       msg: '获取用户列表成功',
       data: {
         list: users,
-        total: countResult.total,
+        total: totalCount, // 使用可能调整后的总数
         page,
         pageSize
       }
     };
+    
+    console.log('【getUsers】返回结果:', {
+      code: result.code,
+      msg: result.msg,
+      data: {
+        total: result.data.total,
+        count: result.data.list.length
+      }
+    });
+    
+    return result;
   } catch (e) {
+    console.error('【getUsers】错误:', e);
     return {
       code: -1,
       msg: '获取用户列表失败',

@@ -16,7 +16,7 @@
 			<view class="section-title">评分历史</view>
 			
 			<view class="no-data" v-if="historyList.length === 0">
-				<image class="no-data-icon" src="/static/images/no-data.png" mode="aspectFit"></image>
+				<image class="no-data-icon"   mode="aspectFit"></image>
 				<text class="no-data-text">暂无评分历史记录</text>
 			</view>
 			
