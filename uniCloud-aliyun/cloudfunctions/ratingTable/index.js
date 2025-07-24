@@ -1217,12 +1217,26 @@ async function deleteGroup(data) {
     if (tables.data.length > 0) {
       console.log(`表格组(${targetId})下有${tables.data.length}个评分表，开始删除...`);
       
-      // 循环删除每个表格
-      for (const table of tables.data) {
-        console.log(`正在删除表格: ${table._id} - ${table.name}`);
+      // 分批处理，每批处理10个表格
+      const batchSize = 10;
+      const totalTables = tables.data.length;
+      let processedCount = 0;
+      
+      for (let i = 0; i < totalTables; i += batchSize) {
+        // 获取当前批次的表格
+        const batch = tables.data.slice(i, Math.min(i + batchSize, totalTables));
         
-        // 使用已有的deleteTable函数删除表格
-        await deleteTable({ tableId: table._id });
+        // 并行处理当前批次的表格删除
+        const deletePromises = batch.map(table => {
+          console.log(`正在删除表格: ${table._id} - ${table.name}`);
+          return deleteTable({ tableId: table._id });
+        });
+        
+        // 等待当前批次完成
+        await Promise.all(deletePromises);
+        
+        processedCount += batch.length;
+        console.log(`已完成 ${processedCount}/${totalTables} 个表格的删除`);
       }
       
       console.log(`成功删除表格组(${targetId})下的所有表格`);
@@ -2194,98 +2208,114 @@ async function copyGroup(data) {
       group_id: source_id
     }).get();
     
-    // 4. 复制每个表格到新表格组
+    // 4. 分批复制表格到新表格组
     if (tables.data.length > 0) {
-      console.log(`源表格组下有${tables.data.length}个表格，开始复制...`);
+      console.log(`源表格组下有${tables.data.length}个表格，开始分批复制...`);
       
-      const copyPromises = tables.data.map(async (table) => {
-        // 创建新表格的基本信息
-        const newTableData = {
-          name: table.name.replace(sourceGroup.year, year), // 替换表格名称中的年份
-          type: table.type,
-          category: table.category || '',
-          rater: table.rater,
-          group_id: newGroupId,
-          items: table.items || []
-        };
+      // 分批处理，每批处理10个表格
+      const batchSize = 10;
+      const totalTables = tables.data.length;
+      let processedCount = 0;
+      
+      for (let i = 0; i < totalTables; i += batchSize) {
+        // 获取当前批次的表格
+        const batch = tables.data.slice(i, Math.min(i + batchSize, totalTables));
         
-        // 创建新表格
-        const newTableResult = await ratingTableCollection.add(newTableData);
-        const newTableId = newTableResult.id;
-        
-        console.log(`复制表格: ${table._id} -> ${newTableId}`);
-        
-        // 更新评分人的表格分配
-        if (table.rater) {
-          const userInfo = await userCollection.where({
-            username: table.rater
-          }).get();
+        // 处理当前批次的表格复制
+        const copyPromises = batch.map(async (table) => {
+          // 创建新表格的基本信息
+          const newTableData = {
+            name: table.name.replace(sourceGroup.year, year), // 替换表格名称中的年份
+            type: table.type,
+            category: table.category || '',
+            rater: table.rater,
+            group_id: newGroupId,
+            items: table.items || []
+          };
           
-          if (userInfo.data.length > 0) {
-            const user = userInfo.data[0];
-            const assignedTables = user.assignedTables || [];
-            
-            if (!assignedTables.includes(newTableId)) {
-              assignedTables.push(newTableId);
-              await userCollection.doc(user._id).update({
-                assignedTables
-              });
-              console.log(`已将表格 ${newTableId} 添加到评分人 ${table.rater} 的分配表中`);
-            }
-          }
-        }
-        
-        // 获取并复制考核对象关联
-        const subjects = await subjectCollection.where({
-          table_id: db.command.in([table._id])
-        }).get();
-        
-        if (subjects.data.length > 0) {
-          console.log(`表格${table._id}有${subjects.data.length}个关联考核对象，开始复制关联...`);
+          // 创建新表格
+          const newTableResult = await ratingTableCollection.add(newTableData);
+          const newTableId = newTableResult.id;
           
-          // 为每个考核对象添加与新表格的关联
-          for (const subject of subjects.data) {
-            // 检查考核对象是否已存在
-            const existingSubject = await subjectCollection.where({
-              name: subject.name,
-              department: subject.department || ''
+          console.log(`复制表格: ${table._id} -> ${newTableId}`);
+          
+          // 更新评分人的表格分配
+          if (table.rater) {
+            const userInfo = await userCollection.where({
+              username: table.rater
             }).get();
             
-            if (existingSubject.data.length > 0) {
-              // 考核对象已存在，更新其表格关联
-              const existingSubjectData = existingSubject.data[0];
-              const tableIds = Array.isArray(existingSubjectData.table_id) ? 
-                existingSubjectData.table_id : 
-                (existingSubjectData.table_id ? [existingSubjectData.table_id] : []);
+            if (userInfo.data.length > 0) {
+              const user = userInfo.data[0];
+              const assignedTables = user.assignedTables || [];
               
-              if (!tableIds.includes(newTableId)) {
-                tableIds.push(newTableId);
-                await subjectCollection.doc(existingSubjectData._id).update({
-                  table_id: tableIds
+              if (!assignedTables.includes(newTableId)) {
+                assignedTables.push(newTableId);
+                await userCollection.doc(user._id).update({
+                  assignedTables
                 });
-                console.log(`更新考核对象 ${subject.name} 关联到新表格 ${newTableId}`);
+                console.log(`已将表格 ${newTableId} 添加到评分人 ${table.rater} 的分配表中`);
               }
-            } else {
-              // 考核对象不存在，创建新的考核对象
-              await subjectCollection.add({
-                name: subject.name,
-                department: subject.department || '',
-                position: subject.position || '',
-                table_id: [newTableId]
-              });
-              console.log(`创建考核对象 ${subject.name} 并关联到新表格 ${newTableId}`);
             }
           }
-        }
+          
+          // 获取并复制考核对象关联
+          const subjects = await subjectCollection.where({
+            table_id: db.command.in([table._id])
+          }).get();
+          
+          if (subjects.data.length > 0) {
+            console.log(`表格${table._id}有${subjects.data.length}个关联考核对象，开始复制关联...`);
+            
+            // 为每个考核对象添加与新表格的关联
+            for (const subject of subjects.data) {
+              // 检查考核对象是否已存在
+              const existingSubject = await subjectCollection.where({
+                name: subject.name,
+                department: subject.department || ''
+              }).get();
+              
+              if (existingSubject.data.length > 0) {
+                // 考核对象已存在，更新其表格关联
+                const existingSubjectData = existingSubject.data[0];
+                const tableIds = Array.isArray(existingSubjectData.table_id) ? 
+                  existingSubjectData.table_id : 
+                  (existingSubjectData.table_id ? [existingSubjectData.table_id] : []);
+                
+                if (!tableIds.includes(newTableId)) {
+                  tableIds.push(newTableId);
+                  await subjectCollection.doc(existingSubjectData._id).update({
+                    table_id: tableIds
+                  });
+                  console.log(`更新考核对象 ${subject.name} 关联到新表格 ${newTableId}`);
+                }
+              } else {
+                // 考核对象不存在，创建新的考核对象
+                await subjectCollection.add({
+                  name: subject.name,
+                  department: subject.department || '',
+                  position: subject.position || '',
+                  table_id: [newTableId]
+                });
+                console.log(`创建考核对象 ${subject.name} 并关联到新表格 ${newTableId}`);
+              }
+            }
+          }
+          
+          return {
+            oldTableId: table._id,
+            newTableId,
+            name: newTableData.name
+          };
+        });
         
-        return {
-          oldTableId: table._id,
-          newTableId,
-          name: newTableData.name
-        };
-      });
+        // 等待当前批次完成
+        await Promise.all(copyPromises);
+        
+        processedCount += batch.length;
+        console.log(`已完成 ${processedCount}/${totalTables} 个表格的复制`);
+      }
       
-      await Promise.all(copyPromises);
       console.log(`所有表格复制完成，共复制了${tables.data.length}个表格`);
     } else {
       console.log(`源表格组下没有表格，无需复制`);

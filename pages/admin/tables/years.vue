@@ -26,6 +26,9 @@
 					<text class="group-desc" v-if="year.description">{{year.description}}</text>
 					
 					<view class="year-actions">
+						<button class="action-btn copy-group" @click.stop="confirmCopyGroup(year)">
+							<text>复制</text>
+						</button>
 						<button class="action-btn delete-group" @click.stop="confirmDeleteGroup(year)">
 							<text>删除</text>
 						</button>
@@ -56,6 +59,31 @@
 				<view class="popup-btns">
 					<button class="cancel-btn" size="mini" @click="hideAddGroupPopup">取消</button>
 					<button class="confirm-btn" size="mini" @click="submitAddGroup">确定</button>
+				</view>
+			</view>
+		</uni-popup>
+		
+		<!-- 复制表格组弹窗 -->
+		<uni-popup ref="copyGroupPopup" type="center">
+			<view class="popup-content">
+				<view class="popup-title">复制表格组</view>
+				<view class="popup-subtitle">
+					<text>从"{{copyGroupData.year}}年{{copyGroupData.description ? ' (' + copyGroupData.description + ')' : ''}}"复制</text>
+				</view>
+				<view class="form-item">
+					<text class="form-label">目标年份</text>
+					<input v-model="copyGroupData.targetYear" class="form-input" placeholder="请输入年份，如：2024" type="number" />
+				</view>
+				<view class="form-item">
+					<text class="form-label">备注说明</text>
+					<input v-model="copyGroupData.targetDescription" class="form-input" placeholder="请输入识别标识（如：第一季度/上半年）" />
+				</view>
+				<view class="copy-notice">
+					<text>将复制所有表格结构和考核对象，但不包含评分数据</text>
+				</view>
+				<view class="popup-btns">
+					<button class="cancel-btn" size="mini" @click="hideCopyGroupPopup">取消</button>
+					<button class="confirm-btn" size="mini" @click="submitCopyGroup">确定</button>
 				</view>
 			</view>
 		</uni-popup>
@@ -148,6 +176,14 @@
 					year: '',
 					description: '',
 					tableCount: 0
+				},
+				// 复制表格组数据
+				copyGroupData: {
+					_id: '',
+					year: '',
+					description: '',
+					targetYear: new Date().getFullYear() + 1,  // 默认目标年份为当前年份+1
+					targetDescription: ''
 				}
 			}
 		},
@@ -808,6 +844,16 @@
 						mask: true
 					});
 					
+					// 增加提示信息
+					if (this.deleteGroupData.tableCount > 10) {
+						// 表格数量较多，提示可能需要较长时间
+						uni.showModal({
+							title: '正在删除',
+							content: `该表格组包含${this.deleteGroupData.tableCount}个表格，删除可能需要较长时间，请耐心等待`,
+							showCancel: false
+						});
+					}
+					
 					const result = await uniCloud.callFunction({
 						name: 'ratingTable',
 						data: {
@@ -815,7 +861,8 @@
 							data: {
 								id: this.deleteGroupData._id
 							}
-						}
+						},
+						timeout: 60000 // 增加超时时间到60秒
 					});
 					
 					uni.hideLoading();
@@ -840,11 +887,142 @@
 				} catch (e) {
 					uni.hideLoading();
 					console.error('删除表格组失败:', e);
-					uni.showModal({
-						title: '删除失败',
-						content: '系统错误，请稍后再试',
-						showCancel: false
+					
+					// 处理超时错误
+					if (e.message && e.message.includes('超时')) {
+						uni.showModal({
+							title: '操作超时',
+							content: '表格数量较多，删除操作超时。建议分批处理或联系管理员增加云函数超时时间。',
+							showCancel: false
+						});
+					} else {
+						uni.showModal({
+							title: '删除失败',
+							content: '系统错误，请稍后再试',
+							showCancel: false
+						});
+					}
+				}
+			},
+			
+			// 显示复制表格组确认弹窗
+			confirmCopyGroup(group) {
+				this.copyGroupData = {
+					_id: group._id,
+					year: group.year,
+					description: group.description || '',
+					targetYear: parseInt(group.year) + 1, // 默认目标年份为源年份+1
+					targetDescription: group.description || ''
+				};
+				this.$refs.copyGroupPopup.open();
+			},
+			
+			// 隐藏复制表格组确认弹窗
+			hideCopyGroupPopup() {
+				this.$refs.copyGroupPopup.close();
+			},
+			
+			// 提交复制表格组
+			async submitCopyGroup() {
+				if (!this.copyGroupData._id) {
+					uni.showToast({
+						title: '复制失败，无效的源表格组ID',
+						icon: 'none'
 					});
+					return;
+				}
+				
+				const targetYear = this.copyGroupData.targetYear.toString().trim();
+				if (!targetYear) {
+					uni.showToast({
+						title: '请输入目标年份',
+						icon: 'none'
+					});
+					return;
+				}
+				
+				// 检查是否为有效的年份格式
+				if (!/^20\d{2}$/.test(targetYear)) {
+					uni.showToast({
+						title: '请输入有效的年份',
+						icon: 'none'
+					});
+					return;
+				}
+				
+				try {
+					uni.showLoading({
+						title: '正在复制...',
+						mask: true
+					});
+					
+					// 获取源表格组的表格数量
+					const sourceGroupTableCount = this.years.find(y => y._id === this.copyGroupData._id)?.tableCount || 0;
+					
+					// 如果表格数量较多，提示可能需要较长时间
+					if (sourceGroupTableCount > 10) {
+						uni.showModal({
+							title: '正在复制',
+							content: `该表格组包含${sourceGroupTableCount}个表格，复制可能需要较长时间，请耐心等待`,
+							showCancel: false
+						});
+					}
+					
+					const result = await uniCloud.callFunction({
+						name: 'ratingTable',
+						data: {
+							action: 'copyGroup',
+							data: {
+								source_id: this.copyGroupData._id,
+								year: targetYear,
+								description: this.copyGroupData.targetDescription || ''
+							}
+						},
+						timeout: 60000 // 增加超时时间到60秒
+					});
+					
+					uni.hideLoading();
+					
+					if (result.result.code === 0) {
+						uni.showToast({
+							title: '复制成功',
+							icon: 'success'
+						});
+						
+						this.hideCopyGroupPopup();
+						
+						// 重新加载数据
+						await this.loadData();
+					} else {
+						uni.showModal({
+							title: '复制失败',
+							content: result.result.msg || '复制表格组失败',
+							showCancel: false
+						});
+					}
+				} catch (e) {
+					uni.hideLoading();
+					console.error('复制表格组失败:', e);
+					
+					// 处理超时错误
+					if (e.message && e.message.includes('超时')) {
+						uni.showModal({
+							title: '操作超时',
+							content: '表格数量较多，复制操作超时。系统会继续在后台处理，请稍后刷新页面查看结果，或联系管理员增加云函数超时时间。',
+							showCancel: false,
+							success: () => {
+								// 关闭弹窗并刷新数据
+								this.hideCopyGroupPopup();
+								this.loadData();
+							}
+						});
+					} else {
+						uni.showModal({
+							title: '复制失败',
+							content: '系统错误，请稍后再试',
+							showCancel: false
+						});
+					}
 				}
 			}
 		}
@@ -1092,6 +1270,12 @@
 		margin-right: 10rpx;
 	}
 	
+	.action-btn.copy-group {
+		background-color: rgba(52, 120, 246, 0.2);
+		border-color: #3478F6;
+		margin-right: 10rpx;
+	}
+	
 	.popup-message {
 		text-align: center;
 		margin-bottom: 20rpx;
@@ -1109,6 +1293,22 @@
 
 	.confirm-btn.delete-btn {
 		background-color: #FF3B30;
+	}
+
+	.popup-subtitle {
+		text-align: center;
+		margin-bottom: 20rpx;
+		font-size: 26rpx;
+		color: #666;
+	}
+	
+	.copy-notice {
+		font-size: 24rpx;
+		color: #666;
+		margin-top: 10rpx;
+		padding: 15rpx;
+		background-color: rgba(52, 120, 246, 0.1);
+		border-radius: 8rpx;
 	}
 
 </style> 

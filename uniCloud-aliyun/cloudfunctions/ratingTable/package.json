@@ -1,8 +1,9 @@
 {
   "name": "ratingTable",
   "version": "1.0.0",
-  "description": "评分表管理功能",
+  "description": "",
   "main": "index.js",
+  "timeout": 60000,
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
